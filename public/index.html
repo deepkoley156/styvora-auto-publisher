@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Styvora Auto-Publisher</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f7f7f7; padding: 20px; color: #111; }
+    .container { max-width: 550px; background: #fff; padding: 30px; border-radius: 12px; margin: auto; border: 1px solid #e8e8e8; }
+    h2 { margin-top: 0; font-size: 24px; }
+    label { font-weight: bold; font-size: 14px; display: block; margin-top: 15px; margin-bottom: 5px; }
+    input { width: 100%; padding: 12px; box-sizing: border-box; border-radius: 8px; border: 1px solid #ddd; font-size: 15px; }
+    button { width: 100%; margin-top: 20px; padding: 15px; background: #111; color: #fff; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; cursor: pointer; }
+    .note { font-size: 13px; color: #666; margin-top: 8px; }
+    #status { margin-top: 15px; font-weight: bold; color: #333; }
+    #result { margin-top: 25px; display: none; padding: 20px; background: #fafafa; border: 1px solid #eee; border-radius: 8px; }
+    #result p { margin: 10px 0; font-size: 14px; word-break: break-all; }
+    a { color: #0066cc; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Styvora Auto Publisher</h2>
+    
+    <label for="productType">Product Type</label>
+    <input type="text" id="productType" placeholder="e.g. Saree, Artificial Necklace">
+    
+    <label for="productUrl">Flipkart Product Link</label>
+    <input type="url" id="productUrl" placeholder="Paste Flipkart URL here">
+    
+    <label for="productImage">Upload Product Image</label>
+    <input type="file" id="productImage" accept="image/jpeg, image/png, image/webp">
+    <div class="note">Pinterest-এর জন্য সবচেয়ে ভালো রেজোলিউশন হলো 1024x1536।</div>
+    
+    <button onclick="publish()" id="submitBtn">Process & Publish</button>
+    <div id="status"></div>
+    
+    <div id="result">
+      <p><strong>Title:</strong> <span id="resTitle"></span></p>
+      <p><strong>Affiliate Link:</strong> <a id="resLink" target="_blank">Click Here</a></p>
+      <p><strong>Landing Page:</strong> <a id="resPage" target="_blank">View Page</a></p>
+    </div>
+  </div>
+
+  <script>
+    async function publish() {
+      const url = document.getElementById("productUrl").value;
+      const type = document.getElementById("productType").value;
+      const file = document.getElementById("productImage").files[0];
+      const status = document.getElementById("status");
+      const btn = document.getElementById("submitBtn");
+      
+      if (!url || !file) {
+        status.textContent = "Error: Please provide both Link and Image!";
+        status.style.color = "red";
+        return;
+      }
+
+      status.textContent = "Processing... Please wait (it may take a minute).";
+      status.style.color = "#333";
+      document.getElementById("result").style.display = "none";
+      btn.disabled = true;
+      btn.style.background = "#555";
+
+      const formData = new FormData();
+      formData.append("productUrl", url);
+      formData.append("productType", type);
+      formData.append("productImage", file);
+
+      try {
+        const res = await fetch("/api/publish", { method: "POST", body: formData });
+        const data = await res.json();
+
+        if (data.success) {
+          status.textContent = "Successfully Published!";
+          status.style.color = "green";
+          document.getElementById("result").style.display = "block";
+          document.getElementById("resTitle").textContent = data.title;
+          document.getElementById("resLink").href = data.affiliateLink;
+          document.getElementById("resPage").href = data.pageUrl;
+        } else {
+          status.textContent = "Error: " + data.error;
+          status.style.color = "red";
+        }
+      } catch (err) {
+        status.textContent = "System Error! Check backend logs.";
+        status.style.color = "red";
+      } finally {
+        btn.disabled = false;
+        btn.style.background = "#111";
+      }
+    }
+  </script>
+</body>
+</html>
+
