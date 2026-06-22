@@ -1,5 +1,17 @@
 const axios = require("axios");
 
+function escapeXml(unsafe) {
+  return String(unsafe || "").replace(/[<>&'"]/g, function (c) {
+    switch (c) {
+      case '<': return '&lt;';
+      case '>': return '&gt;';
+      case '&': return '&amp;';
+      case '\'': return '&apos;';
+      case '"': return '&quot;';
+    }
+  });
+}
+
 function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -28,6 +40,30 @@ function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
 </html>`;
 }
 
+function buildRssItem({ title, pageUrl, description, imageUrl, pubDate }) {
+  return `  <item>
+    <title><![CDATA[${title}]]></title>
+    <link>${escapeXml(pageUrl)}</link>
+    <guid>${escapeXml(pageUrl)}</guid>
+    <description><![CDATA[${description}]]></description>
+    <pubDate>${escapeXml(pubDate)}</pubDate>
+    <enclosure url="${escapeXml(imageUrl)}" type="image/jpeg" />
+  </item>`;
+}
+
+function buildInitialRss(firstItem, siteUrl) {
+  return `<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0">
+<channel>
+  <title>Styvora Auto RSS</title>
+  <link>${escapeXml(siteUrl)}</link>
+  <description>Latest fashion affiliate products</description>
+  <language>en-us</language>
+${firstItem}
+</channel>
+</rss>`;
+}
+
 async function generateWithGemini(imageBase64, imageMimeType, focusProduct) {
   const prompt = `
   You are an expert Pinterest marketer for women's fashion.
@@ -54,25 +90,32 @@ async function generateWithGemini(imageBase64, imageMimeType, focusProduct) {
     }
   );
   
-  // Syntax error fixed line
   const text = response.data.candidates[0].content.parts[0].text.replace(/`{3}json|`{3}/g, "").trim();
   return JSON.parse(text);
 }
 
-async function putGitHubFile(path, contentBase64, message) {
+async function getGitHubFile(path) {
+  const url = `https://api.github.com/repos/${process.env.GITHUB_USERNAME}/${process.env.GITHUB_REPO}/contents/${path}`;
+  try {
+    const res = await axios.get(url, {
+      headers: { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` }
+    });
+    return { content: Buffer.from(res.data.content, "base64").toString("utf8"), sha: res.data.sha };
+  } catch (e) {
+    return null;
+  }
+}
+
+async function putGitHubFile(path, contentBase64, message, sha = null) {
   const url = `https://api.github.com/repos/${process.env.GITHUB_USERNAME}/${process.env.GITHUB_REPO}/contents/${path}`;
   const headers = {
     Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
     Accept: "application/vnd.github+json"
   };
+  const body = { message, content: contentBase64, branch: "main" };
+  if (sha) body.sha = sha;
 
-  let sha;
-  try {
-    const existing = await axios.get(url, { headers });
-    sha = existing.data.sha;
-  } catch (e) {}
-
-  await axios.put(url, { message, content: contentBase64, sha, branch: "main" }, { headers });
+  await axios.put(url, body, { headers });
 }
 
 async function publishToGitHub({ affiliateLink, imageBase64, imageMimeType, focusProduct }) {
@@ -83,28 +126,36 @@ async function publishToGitHub({ affiliateLink, imageBase64, imageMimeType, focu
   const imagePath = `images/${slug}.jpg`;
   const pagePath = `${slug}.html`;
 
-  // 1. Upload Image to GitHub
+  // 1. Upload Image
   await putGitHubFile(imagePath, imageBase64, `Add image ${slug}`);
   
-  // 2. Upload Landing Page HTML to GitHub
+  // 2. Upload Landing Page
   const html = buildHtml(content.title, content.description, affiliateLink, `${siteUrl}/${imagePath}`, content.hashtags);
   const htmlBase64 = Buffer.from(html).toString("base64");
   await putGitHubFile(pagePath, htmlBase64, `Add landing page ${slug}`);
 
-  // 3. Send Data to Make.com Webhook (For Pinterest)
-  if (process.env.MAKE_WEBHOOK_URL) {
-    try {
-      await axios.post(process.env.MAKE_WEBHOOK_URL, {
-        title: content.title,
-        description: `${content.description}\n\n${content.hashtags}`, 
-        link: `${siteUrl}/${pagePath}`, // Landing page link is passed here securely
-        imageUrl: `${siteUrl}/${imagePath}` // Direct image link
-      });
-      console.log("Successfully triggered Make.com Webhook");
-    } catch (err) {
-      console.log("Make.com webhook failed:", err.message);
-    }
+  // 3. Update RSS Feed
+  const pubDate = new Date().toUTCString();
+  const rssItem = buildRssItem({
+    title: content.title,
+    pageUrl: `${siteUrl}/${pagePath}`,
+    description: `${content.description} \n\n ${content.hashtags}`,
+    imageUrl: `${siteUrl}/${imagePath}`,
+    pubDate
+  });
+
+  const existingRss = await getGitHubFile("rss.xml");
+  let newRssContent = "";
+  let rssSha = null;
+
+  if (existingRss) {
+    newRssContent = existingRss.content.replace("</channel>", `${rssItem}\n</channel>`);
+    rssSha = existingRss.sha;
+  } else {
+    newRssContent = buildInitialRss(rssItem, siteUrl);
   }
+
+  await putGitHubFile("rss.xml", Buffer.from(newRssContent).toString("base64"), `Update RSS for ${slug}`, rssSha);
 
   return {
     title: content.title,
