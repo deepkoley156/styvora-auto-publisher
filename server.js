@@ -10,7 +10,6 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ইমেজ ফাইল মেমোরিতে সেভ করার জন্য multer সেটআপ
 const upload = multer({ storage: multer.memoryStorage() });
 
 app.use(express.json());
@@ -26,8 +25,12 @@ app.post("/api/publish", upload.single("productImage"), async (req, res) => {
   try {
     const productUrl = req.body.productUrl;
     const focusProduct = req.body.productType || "product";
+    const geminiApiKey = req.body.geminiApiKey; // Getting the key from frontend
     const imageFile = req.file;
 
+    if (!geminiApiKey) {
+      return res.status(400).json({ success: false, error: "Gemini API Key is missing." });
+    }
     if (!productUrl || !imageFile) {
       return res.status(400).json({ success: false, error: "URL and Image are required." });
     }
@@ -35,20 +38,18 @@ app.post("/api/publish", upload.single("productImage"), async (req, res) => {
     isProcessing = true;
     console.log("Started processing workflow...");
 
-    // ১. টেলিগ্রাম বট থেকে অ্যাফিলিয়েট লিংক নেওয়া
     const { affiliateLink } = await sendLinkToBot(productUrl);
     if (!affiliateLink) throw new Error("Could not fetch affiliate link.");
 
-    // ২. ইমেজ বাফার থেকে base64 এ কনভার্ট করা
     const imageBase64 = imageFile.buffer.toString("base64");
     const imageMimeType = imageFile.mimetype;
 
-    // ৩. AI দিয়ে কন্টেন্ট তৈরি এবং GitHub-এ আপলোড করা
     const result = await publishToGitHub({
       affiliateLink,
       imageBase64,
       imageMimeType,
-      focusProduct
+      focusProduct,
+      geminiApiKey // Passing key to publisher
     });
 
     res.json({ success: true, ...result });
