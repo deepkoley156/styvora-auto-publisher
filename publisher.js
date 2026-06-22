@@ -54,8 +54,8 @@ async function generateWithGemini(imageBase64, imageMimeType, focusProduct) {
     }
   );
   
-  const text = response.data.candidates[0].content.parts[0].text.replace(/```json|
-```/g, "").trim();
+  // Syntax Error ফিক্স করা হয়েছে এই লাইনে
+  const text = response.data.candidates[0].content.parts[0].text.replace(/`{3}json|`{3}/g, "").trim();
   return JSON.parse(text);
 }
 
