@@ -25,7 +25,8 @@ app.post("/api/publish", upload.single("productImage"), async (req, res) => {
   try {
     const productUrl = req.body.productUrl;
     const focusProduct = req.body.productType || "product";
-    const geminiApiKey = req.body.geminiApiKey; // Getting the key from frontend
+    const geminiApiKey = req.body.geminiApiKey; 
+    const telegramBypass = req.body.telegramBypass === 'true'; // Checking if bypass is ON
     const imageFile = req.file;
 
     if (!geminiApiKey) {
@@ -38,8 +39,20 @@ app.post("/api/publish", upload.single("productImage"), async (req, res) => {
     isProcessing = true;
     console.log("Started processing workflow...");
 
-    const { affiliateLink } = await sendLinkToBot(productUrl);
-    if (!affiliateLink) throw new Error("Could not fetch affiliate link.");
+    let affiliateLink = "";
+
+    // Telegram Bypass Logic
+    if (telegramBypass) {
+      console.log("Telegram Bypass is ON: Using direct link provided by user.");
+      affiliateLink = productUrl; // Using the provided URL directly as the affiliate link
+    } else {
+      console.log("Telegram Bypass is OFF: Sending link to Telegram bot...");
+      const botResult = await sendLinkToBot(productUrl);
+      if (!botResult || !botResult.affiliateLink) {
+        throw new Error("Could not fetch affiliate link from Telegram.");
+      }
+      affiliateLink = botResult.affiliateLink;
+    }
 
     const imageBase64 = imageFile.buffer.toString("base64");
     const imageMimeType = imageFile.mimetype;
@@ -49,7 +62,7 @@ app.post("/api/publish", upload.single("productImage"), async (req, res) => {
       imageBase64,
       imageMimeType,
       focusProduct,
-      geminiApiKey // Passing key to publisher
+      geminiApiKey
     });
 
     res.json({ success: true, ...result });
