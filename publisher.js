@@ -126,15 +126,12 @@ async function publishToGitHub({ affiliateLink, imageBase64, imageMimeType, focu
   const imagePath = `images/${slug}.jpg`;
   const pagePath = `${slug}.html`;
 
-  // 1. Upload Image
   await putGitHubFile(imagePath, imageBase64, `Add image ${slug}`);
   
-  // 2. Upload Landing Page
   const html = buildHtml(content.title, content.description, affiliateLink, `${siteUrl}/${imagePath}`, content.hashtags);
   const htmlBase64 = Buffer.from(html).toString("base64");
   await putGitHubFile(pagePath, htmlBase64, `Add landing page ${slug}`);
 
-  // 3. Update RSS Feed
   const pubDate = new Date().toUTCString();
   const rssItem = buildRssItem({
     title: content.title,
@@ -148,11 +145,13 @@ async function publishToGitHub({ affiliateLink, imageBase64, imageMimeType, focu
   let newRssContent = "";
   let rssSha = null;
 
-  if (existingRss) {
+  // এই জায়গাটিতে লজিক আপডেট করা হয়েছে
+  if (existingRss && existingRss.content.includes("</channel>")) {
     newRssContent = existingRss.content.replace("</channel>", `${rssItem}\n</channel>`);
     rssSha = existingRss.sha;
   } else {
     newRssContent = buildInitialRss(rssItem, siteUrl);
+    if (existingRss) rssSha = existingRss.sha; // ফাইল আছে কিন্তু ফাঁকা, তাই Overwrite করতে হবে
   }
 
   await putGitHubFile("rss.xml", Buffer.from(newRssContent).toString("base64"), `Update RSS for ${slug}`, rssSha);
