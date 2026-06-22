@@ -54,7 +54,7 @@ async function generateWithGemini(imageBase64, imageMimeType, focusProduct) {
     }
   );
   
-  // Syntax Error ফিক্স করা হয়েছে এই লাইনে
+  // Syntax error fixed line
   const text = response.data.candidates[0].content.parts[0].text.replace(/`{3}json|`{3}/g, "").trim();
   return JSON.parse(text);
 }
@@ -83,13 +83,28 @@ async function publishToGitHub({ affiliateLink, imageBase64, imageMimeType, focu
   const imagePath = `images/${slug}.jpg`;
   const pagePath = `${slug}.html`;
 
-  // ছবি আপলোড
+  // 1. Upload Image to GitHub
   await putGitHubFile(imagePath, imageBase64, `Add image ${slug}`);
   
-  // ল্যান্ডিং পেজ (HTML) আপলোড
+  // 2. Upload Landing Page HTML to GitHub
   const html = buildHtml(content.title, content.description, affiliateLink, `${siteUrl}/${imagePath}`, content.hashtags);
   const htmlBase64 = Buffer.from(html).toString("base64");
   await putGitHubFile(pagePath, htmlBase64, `Add landing page ${slug}`);
+
+  // 3. Send Data to Make.com Webhook (For Pinterest)
+  if (process.env.MAKE_WEBHOOK_URL) {
+    try {
+      await axios.post(process.env.MAKE_WEBHOOK_URL, {
+        title: content.title,
+        description: `${content.description}\n\n${content.hashtags}`, 
+        link: `${siteUrl}/${pagePath}`, // Landing page link is passed here securely
+        imageUrl: `${siteUrl}/${imagePath}` // Direct image link
+      });
+      console.log("Successfully triggered Make.com Webhook");
+    } catch (err) {
+      console.log("Make.com webhook failed:", err.message);
+    }
+  }
 
   return {
     title: content.title,
