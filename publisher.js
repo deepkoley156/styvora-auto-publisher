@@ -64,7 +64,8 @@ ${firstItem}
 </rss>`;
 }
 
-async function generateWithGemini(imageBase64, imageMimeType, focusProduct) {
+// Added geminiApiKey parameter
+async function generateWithGemini(imageBase64, imageMimeType, focusProduct, geminiApiKey) {
   const prompt = `
   You are an expert Pinterest marketer for women's fashion.
   Primary focus: ${focusProduct}.
@@ -78,8 +79,9 @@ async function generateWithGemini(imageBase64, imageMimeType, focusProduct) {
     "hashtags": "#fashion #style"
   }`;
 
+  // Using the passed API key instead of process.env
   const response = await axios.post(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
     {
       contents: [{
         parts: [
@@ -118,8 +120,10 @@ async function putGitHubFile(path, contentBase64, message, sha = null) {
   await axios.put(url, body, { headers });
 }
 
-async function publishToGitHub({ affiliateLink, imageBase64, imageMimeType, focusProduct }) {
-  const content = await generateWithGemini(imageBase64, imageMimeType, focusProduct);
+// Added geminiApiKey parameter
+async function publishToGitHub({ affiliateLink, imageBase64, imageMimeType, focusProduct, geminiApiKey }) {
+  // Passing the key to the generator
+  const content = await generateWithGemini(imageBase64, imageMimeType, focusProduct, geminiApiKey);
   const slug = content.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   
   const siteUrl = `https://${process.env.GITHUB_USERNAME}.github.io/${process.env.GITHUB_REPO}`;
@@ -145,13 +149,12 @@ async function publishToGitHub({ affiliateLink, imageBase64, imageMimeType, focu
   let newRssContent = "";
   let rssSha = null;
 
-  // এই জায়গাটিতে লজিক আপডেট করা হয়েছে
   if (existingRss && existingRss.content.includes("</channel>")) {
     newRssContent = existingRss.content.replace("</channel>", `${rssItem}\n</channel>`);
     rssSha = existingRss.sha;
   } else {
     newRssContent = buildInitialRss(rssItem, siteUrl);
-    if (existingRss) rssSha = existingRss.sha; // ফাইল আছে কিন্তু ফাঁকা, তাই Overwrite করতে হবে
+    if (existingRss) rssSha = existingRss.sha;
   }
 
   await putGitHubFile("rss.xml", Buffer.from(newRssContent).toString("base64"), `Update RSS for ${slug}`, rssSha);
