@@ -40,7 +40,7 @@ function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
 </html>`;
 }
 
-function buildRssItem({ title, pageUrl, description, imageUrl, pubDate }) {
+function buildRssItem({ title, pageUrl, description, imageUrl, pubDate, altText }) {
   return `  <item>
     <title><![CDATA[${title}]]></title>
     <link>${escapeXml(pageUrl)}</link>
@@ -48,6 +48,7 @@ function buildRssItem({ title, pageUrl, description, imageUrl, pubDate }) {
     <description><![CDATA[${description}]]></description>
     <pubDate>${escapeXml(pubDate)}</pubDate>
     <enclosure url="${escapeXml(imageUrl)}" type="image/jpeg" />
+    <altText><![CDATA[${altText}]]></altText>
   </item>`;
 }
 
@@ -64,7 +65,6 @@ ${firstItem}
 </rss>`;
 }
 
-// Added geminiApiKey parameter
 async function generateWithGemini(imageBase64, imageMimeType, focusProduct, geminiApiKey) {
   const prompt = `
   You are an expert Pinterest marketer for women's fashion.
@@ -76,10 +76,10 @@ async function generateWithGemini(imageBase64, imageMimeType, focusProduct, gemi
   {
     "title": "Short catchy title",
     "description": "2 lines premium description",
-    "hashtags": "#fashion #style"
+    "hashtags": "#fashion #style",
+    "altText": "A clear visual description of what is purely visible in the image for Pinterest alt text (no emojis, no promotional words, max 150 characters)"
   }`;
 
-  // Using the passed API key instead of process.env
   const response = await axios.post(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
     {
@@ -120,9 +120,7 @@ async function putGitHubFile(path, contentBase64, message, sha = null) {
   await axios.put(url, body, { headers });
 }
 
-// Added geminiApiKey parameter
 async function publishToGitHub({ affiliateLink, imageBase64, imageMimeType, focusProduct, geminiApiKey }) {
-  // Passing the key to the generator
   const content = await generateWithGemini(imageBase64, imageMimeType, focusProduct, geminiApiKey);
   const slug = content.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   
@@ -142,7 +140,8 @@ async function publishToGitHub({ affiliateLink, imageBase64, imageMimeType, focu
     pageUrl: `${siteUrl}/${pagePath}`,
     description: `${content.description} \n\n ${content.hashtags}`,
     imageUrl: `${siteUrl}/${imagePath}`,
-    pubDate
+    pubDate,
+    altText: content.altText || content.title // Passing altText to RSS
   });
 
   const existingRss = await getGitHubFile("rss.xml");
