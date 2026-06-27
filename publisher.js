@@ -1,4 +1,5 @@
 const axios = require("axios");
+const FormData = require("form-data");
 
 function escapeXml(unsafe) {
   return String(unsafe || "").replace(/[<>&'"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '\'': '&apos;', '"': '&quot;' }[c]));
@@ -32,24 +33,50 @@ function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
 </html>`;
 }
 
-// Image AI Function Wrapper to swap model while keeping dress same
+// 🚀 STABILITY AI MODEL SWAP LOGIC
 async function processModelSwap(originalImageUrl, imageAiKey) {
-  const prompt = "ei image tar model change korte chai dress eki rekhe, model hobe indian beautiful white skin tone young girl";
-  console.log(`Executing Model Swap AI Prompt: "${prompt}"`);
-
   if (!imageAiKey) {
-    console.log("No Image AI Key. Skipping model swap, using original image.");
-    return originalImageUrl;
+    console.log("No Image AI Key provided. Skipping model swap.");
+    return { isBase64: false, url: originalImageUrl };
+  }
+
+  console.log(`Downloading original image for AI processing: ${originalImageUrl}`);
+  try {
+    // 1. Flipkart link থেকে আসল ছবি ডাউনলোড করা
+    const imageRes = await axios.get(originalImageUrl, { responseType: 'arraybuffer' });
+    
+    console.log("Sending image to Stability AI for model swap...");
+    const formData = new FormData();
+    formData.append('init_image', Buffer.from(imageRes.data), 'image.jpg');
+    formData.append('init_image_mode', 'IMAGE_STRENGTH');
+    formData.append('image_strength', 0.35); // 0.35 মানে ড্রেস একই থাকবে, কিন্তু মডেল/ব্যাকগ্রাউন্ড পাল্টে যাবে
+    formData.append('text_prompts[0][text]', "indian beautiful white skin tone young girl wearing the dress, highly detailed, photorealistic fashion model, cinematic lighting, 1024x1536 frame resolution");
+    formData.append('text_prompts[0][weight]', 1);
+
+    // 2. Stability AI-তে ছবি ও প্রম্পট পাঠানো
+    const aiResponse = await axios.post(
+      'https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/image-to-image',
+      formData,
+      {
+        headers: {
+          ...formData.getHeaders(),
+          Accept: 'application/json',
+          Authorization: `Bearer ${imageAiKey}`
+        }
+      }
+    );
+
+    // 3. নতুন জেনারেট হওয়া ছবিটি রিসিভ করা
+    if (aiResponse.data && aiResponse.data.artifacts && aiResponse.data.artifacts.length > 0) {
+       console.log("✅ Model swap successful!");
+       return { isBase64: true, base64: aiResponse.data.artifacts[0].base64, mimeType: 'image/jpeg' };
+    }
+  } catch (err) {
+    console.error("❌ Model swap failed. Using original image. Error:", err.response ? err.response.data : err.message);
   }
   
-  try {
-    // Pipeline setup example for Replicate / Flux Image-to-Image API
-    // Replace this section with your chosen API endpoint if using Replicate/Leonardo
-    return originalImageUrl; 
-  } catch (err) {
-    console.log("Model swap failed, falling back to original image.");
-    return originalImageUrl;
-  }
+  // এআই ফেল করলে যেন সিস্টেম থেমে না যায়, তাই অরিজিনাল ছবি পাঠিয়ে দেওয়া হবে
+  return { isBase64: false, url: originalImageUrl };
 }
 
 async function generateWithGemini(imageBase64, imageMimeType, focusProduct, geminiApiKey) {
@@ -81,14 +108,24 @@ async function putGitHubFile(path, contentBase64, message, sha = null) {
 }
 
 async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, geminiApiKey, imageAiKey }) {
-  // 1. Process Model Swap via Image AI Prompt
-  const finalImageUrl = await processModelSwap(imageUrl, imageAiKey);
+  
+  // 1. Process Model Swap
+  const finalImageInfo = await processModelSwap(imageUrl, imageAiKey);
 
-  // Download final image buffer for GitHub and Gemini processing
-  const imgRes = await axios.get(finalImageUrl, { responseType: 'arraybuffer' });
-  const imageBase64 = Buffer.from(imgRes.data).toString('base64');
-  const imageMimeType = imgRes.headers['content-type'] || 'image/jpeg';
+  let imageBase64;
+  let imageMimeType;
 
+  // এআই দিয়ে তৈরি ছবি হলে সরাসরি Base64 নেবে, নাহলে লিংকের ছবি ডাউনলোড করবে
+  if (finalImageInfo.isBase64) {
+    imageBase64 = finalImageInfo.base64;
+    imageMimeType = finalImageInfo.mimeType;
+  } else {
+    const imgRes = await axios.get(finalImageInfo.url, { responseType: 'arraybuffer' });
+    imageBase64 = Buffer.from(imgRes.data).toString('base64');
+    imageMimeType = imgRes.headers['content-type'] || 'image/jpeg';
+  }
+
+  // 2. Gemini AI দিয়ে টাইটেল ও ডেসক্রিপশন তৈরি
   const content = await generateWithGemini(imageBase64, imageMimeType, focusProduct, geminiApiKey);
   const slug = content.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   
@@ -96,12 +133,12 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, geminiAp
   const imagePath = `images/${slug}.jpg`;
   const pagePath = `${slug}.html`;
 
+  // 3. GitHub-এ আপলোড
   await putGitHubFile(imagePath, imageBase64, `Add image ${slug}`);
-  
   const html = buildHtml(content.title, content.description, affiliateLink, `${siteUrl}/${imagePath}`, content.hashtags);
   await putGitHubFile(pagePath, Buffer.from(html).toString("base64"), `Add landing page ${slug}`);
 
-  // Update RSS Feed
+  // 4. RSS Feed আপডেট
   const itemXml = `  <item>
     <title><![CDATA[${content.title}]]></title>
     <link>${escapeXml(`${siteUrl}/${pagePath}`)}</link>
