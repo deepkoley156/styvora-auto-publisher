@@ -36,7 +36,7 @@
       <input type="password" id="geminiKey" placeholder="Enter Gemini API Key">
       
       <label for="imageAiKey">Image AI API Key (Optional)</label>
-      <input type="password" id="imageAiKey" placeholder="Enter Replicate/Image AI Key">
+      <input type="password" id="imageAiKey" placeholder="Enter Replicate/Stability AI Key">
 
       <label for="productType">Product Type</label>
       <input type="text" id="productType" placeholder="e.g. Saree, Kurti">
@@ -49,9 +49,9 @@
       <div id="saveStatus" style="color: green; font-size: 12px; margin-top: 5px; display: none;">Settings Saved!</div>
     </div>
     
-    <label for="excelFile">Upload Products Excel Sheet (.xlsx / .xls)</label>
-    <input type="file" id="excelFile" accept=".xlsx, .xls">
-    <div class="note">Excel-e অবশই 3টি Column থাকতে হবে: <b>product link</b>, <b>affiliate link</b>, এবং <b>image</b> (Direct URL)</div>
+    <label for="excelFile">Upload Products Sheet (.xlsx / .xls / .csv)</label>
+    <input type="file" id="excelFile" accept=".xlsx, .xls, .csv">
+    <div class="note">ফাইলে অবশই ৩টি Column থাকতে হবে: <b>product link</b>, <b>affiliate link</b>, এবং <b>image</b></div>
     
     <button class="main-btn" onclick="startBulkProcess()" id="submitBtn">Start Bulk Processing</button>
     
@@ -105,16 +105,16 @@
         return;
       }
       if (fileInput.files.length === 0) {
-        alert("Please upload an Excel file!");
+        alert("Please upload an Excel or CSV file!");
         return;
       }
 
-      status.textContent = "Parsing Excel File...";
+      status.textContent = "Parsing File...";
       status.style.color = "#333";
       document.getElementById("consoleLog").innerHTML = "";
       btn.disabled = true;
 
-      // Step 1: Upload Excel to Backend to Parse Rows
+      // Step 1: Upload File to Backend to Parse Rows
       const formData = new FormData();
       formData.append("excelFile", fileInput.files[0]);
 
@@ -123,16 +123,16 @@
         const parseData = await parseRes.json();
 
         if (!parseData.success || parseData.products.length === 0) {
-          throw new Error(parseData.error || "No valid products found in Excel.");
+          throw new Error(parseData.error || "No valid products found in the file.");
         }
 
         const products = parseData.products;
-        logToConsole(`Found ${products.length} products in Excel sheet. Starting loop...`);
+        logToConsole(`Found ${products.length} products in sheet. Starting loop...`);
 
         // Step 2: Loop over each product sequentially
         for (let i = 0; i < products.length; i++) {
           status.textContent = `Processing product ${i + 1} of ${products.length}...`;
-          logToConsole(`Processing Row ${i + 1}: ${products[i].productLink ? 'Valid Link' : 'No Link'}`);
+          logToConsole(`Processing Row ${i + 1}: ${products[i].productLink || products[i].affiliateLink ? 'Valid Link' : 'No Link'}`);
 
           const singleRes = await fetch("/api/publish-single", {
             method: "POST",
