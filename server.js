@@ -2,6 +2,7 @@ const path = require("path");
 const express = require("express");
 const dotenv = require("dotenv");
 const multer = require("multer");
+const xlsx = require("xlsx");
 const { sendLinkToBot, initTelegramClient } = require("./telegram");
 const { publishToGitHub } = require("./publisher");
 
@@ -12,74 +13,73 @@ const PORT = process.env.PORT || 3000;
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, "public")));
 
-let isProcessing = false;
-
-app.post("/api/publish", upload.single("productImage"), async (req, res) => {
-  if (isProcessing) {
-    return res.status(429).json({ success: false, error: "System is busy processing another product." });
-  }
-
+// Endpoint 1: Parse Excel Rows
+app.post("/api/parse-excel", upload.single("excelFile"), (req, res) => {
   try {
-    const productUrl = req.body.productUrl;
-    const focusProduct = req.body.productType || "product";
-    const geminiApiKey = req.body.geminiApiKey; 
-    const telegramBypass = req.body.telegramBypass === 'true'; // Checking if bypass is ON
-    const imageFile = req.file;
+    if (!req.file) return res.status(400).json({ success: false, error: "No file uploaded." });
 
-    if (!geminiApiKey) {
-      return res.status(400).json({ success: false, error: "Gemini API Key is missing." });
+    const workbook = xlsx.read(req.file.buffer, { type: "buffer" });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    const rows = xlsx.utils.sheet_to_json(sheet);
+
+    // Standardizing case-insensitive keys
+    const products = rows.map(row => {
+      const keys = Object.keys(row);
+      const getVal = (name) => row[keys.find(k => k.toLowerCase().trim() === name)] || "";
+      return {
+        productLink: getVal("product link"),
+        affiliateLink: getVal("affiliate link"),
+        image: getVal("image")
+      };
+    }).filter(p => p.productLink || p.affiliateLink);
+
+    res.json({ success: true, products });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Endpoint 2: Process Single Row securely inside loop
+app.post("/api/publish-single", async (req, res) => {
+  try {
+    const { productUrl, focusProduct, geminiApiKey, imageAiKey, telegramBypass } = req.body;
+    let { affiliateLink, imageUrl } = req.body;
+
+    if (!geminiApiKey || !imageUrl) {
+      return res.status(400).json({ success: false, error: "Missing required details." });
     }
-    if (!productUrl || !imageFile) {
-      return res.status(400).json({ success: false, error: "URL and Image are required." });
-    }
 
-    isProcessing = true;
-    console.log("Started processing workflow...");
-
-    let affiliateLink = "";
-
-    // Telegram Bypass Logic
-    if (telegramBypass) {
-      console.log("Telegram Bypass is ON: Using direct link provided by user.");
-      affiliateLink = productUrl; // Using the provided URL directly as the affiliate link
-    } else {
-      console.log("Telegram Bypass is OFF: Sending link to Telegram bot...");
+    // If Telegram Bypass is OFF, fetch dynamically
+    if (!telegramBypass && productUrl) {
+      console.log("Fetching Affiliate link from Telegram...");
       const botResult = await sendLinkToBot(productUrl);
-      if (!botResult || !botResult.affiliateLink) {
-        throw new Error("Could not fetch affiliate link from Telegram.");
+      if (botResult && botResult.affiliateLink) {
+        affiliateLink = botResult.affiliateLink;
       }
-      affiliateLink = botResult.affiliateLink;
     }
 
-    const imageBase64 = imageFile.buffer.toString("base64");
-    const imageMimeType = imageFile.mimetype;
-
+    // Call the updated GitHub publisher with Model Change prompt capabilities
     const result = await publishToGitHub({
       affiliateLink,
-      imageBase64,
-      imageMimeType,
+      imageUrl, // Row's image URL
       focusProduct,
-      geminiApiKey
+      geminiApiKey,
+      imageAiKey
     });
 
     res.json({ success: true, ...result });
 
   } catch (error) {
-    console.error("Error:", error);
+    console.error("Row process failed:", error.message);
     res.status(500).json({ success: false, error: error.message });
-  } finally {
-    isProcessing = false;
   }
 });
 
 app.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
-  try {
-    await initTelegramClient();
-  } catch (error) {
-    console.error("Telegram init failed:", error.message);
-  }
+  try { await initTelegramClient(); } catch (e) { console.log("Telegram client skip:", e.message); }
 });
