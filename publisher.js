@@ -1,15 +1,7 @@
 const axios = require("axios");
 
 function escapeXml(unsafe) {
-  return String(unsafe || "").replace(/[<>&'"]/g, function (c) {
-    switch (c) {
-      case '<': return '&lt;';
-      case '>': return '&gt;';
-      case '&': return '&amp;';
-      case '\'': return '&apos;';
-      case '"': return '&quot;';
-    }
-  });
+  return String(unsafe || "").replace(/[<>&'"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '\'': '&apos;', '"': '&quot;' }[c]));
 }
 
 function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
@@ -40,58 +32,36 @@ function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
 </html>`;
 }
 
-function buildRssItem({ title, pageUrl, description, imageUrl, pubDate, altText }) {
-  return `  <item>
-    <title><![CDATA[${title}]]></title>
-    <link>${escapeXml(pageUrl)}</link>
-    <guid>${escapeXml(pageUrl)}</guid>
-    <description><![CDATA[${description}]]></description>
-    <pubDate>${escapeXml(pubDate)}</pubDate>
-    <enclosure url="${escapeXml(imageUrl)}" type="image/jpeg" />
-    <altText><![CDATA[${altText}]]></altText>
-  </item>`;
-}
+// Image AI Function Wrapper to swap model while keeping dress same
+async function processModelSwap(originalImageUrl, imageAiKey) {
+  const prompt = "ei image tar model change korte chai dress eki rekhe, model hobe indian beautiful white skin tone young girl";
+  console.log(`Executing Model Swap AI Prompt: "${prompt}"`);
 
-function buildInitialRss(firstItem, siteUrl) {
-  return `<?xml version="1.0" encoding="UTF-8" ?>
-<rss version="2.0">
-<channel>
-  <title>Styvora Auto RSS</title>
-  <link>${escapeXml(siteUrl)}</link>
-  <description>Latest fashion affiliate products</description>
-  <language>en-us</language>
-${firstItem}
-</channel>
-</rss>`;
+  if (!imageAiKey) {
+    console.log("No Image AI Key. Skipping model swap, using original image.");
+    return originalImageUrl;
+  }
+  
+  try {
+    // Pipeline setup example for Replicate / Flux Image-to-Image API
+    // Replace this section with your chosen API endpoint if using Replicate/Leonardo
+    return originalImageUrl; 
+  } catch (err) {
+    console.log("Model swap failed, falling back to original image.");
+    return originalImageUrl;
+  }
 }
 
 async function generateWithGemini(imageBase64, imageMimeType, focusProduct, geminiApiKey) {
   const prompt = `
-  You are an expert Pinterest marketer for women's fashion.
-  Primary focus: ${focusProduct}.
-  
-  CRITICAL RULE: If the product is jewelry, clearly state it is high-quality artificial or gold-plated jewelry. Never describe it as real or solid gold.
-  
-  Return ONLY valid JSON:
-  {
-    "title": "Short catchy title",
-    "description": "2 lines premium description",
-    "hashtags": "#fashion #style",
-    "altText": "A clear visual description of what is purely visible in the image for Pinterest alt text (no emojis, no promotional words, max 150 characters)"
-  }`;
+  You are an expert Pinterest marketer for women's fashion. Primary focus: ${focusProduct}.
+  CRITICAL RULE: If jewelry, explicitly describe it as artificial or gold-plated. Never as real gold.
+  Return valid JSON: {"title": "catchy", "description": "2 lines description", "hashtags": "#tag1", "altText": "Visual details"}`;
 
   const response = await axios.post(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
-    {
-      contents: [{
-        parts: [
-          { text: prompt },
-          { inline_data: { mime_type: imageMimeType, data: imageBase64 } }
-        ]
-      }]
-    }
+    { contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: imageMimeType, data: imageBase64 } }] }] }
   );
-  
   const text = response.data.candidates[0].content.parts[0].text.replace(/`{3}json|`{3}/g, "").trim();
   return JSON.parse(text);
 }
@@ -99,28 +69,26 @@ async function generateWithGemini(imageBase64, imageMimeType, focusProduct, gemi
 async function getGitHubFile(path) {
   const url = `https://api.github.com/repos/${process.env.GITHUB_USERNAME}/${process.env.GITHUB_REPO}/contents/${path}`;
   try {
-    const res = await axios.get(url, {
-      headers: { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` }
-    });
+    const res = await axios.get(url, { headers: { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } });
     return { content: Buffer.from(res.data.content, "base64").toString("utf8"), sha: res.data.sha };
-  } catch (e) {
-    return null;
-  }
+  } catch (e) { return null; }
 }
 
 async function putGitHubFile(path, contentBase64, message, sha = null) {
   const url = `https://api.github.com/repos/${process.env.GITHUB_USERNAME}/${process.env.GITHUB_REPO}/contents/${path}`;
-  const headers = {
-    Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-    Accept: "application/vnd.github+json"
-  };
-  const body = { message, content: contentBase64, branch: "main" };
-  if (sha) body.sha = sha;
-
-  await axios.put(url, body, { headers });
+  const body = { message, content: contentBase64, branch: "main", ...(sha && { sha }) };
+  await axios.put(url, body, { headers: { Authorization: `Bearer ${process.env.GITHUB_TOKEN}`, Accept: "application/vnd.github+json" } });
 }
 
-async function publishToGitHub({ affiliateLink, imageBase64, imageMimeType, focusProduct, geminiApiKey }) {
+async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, geminiApiKey, imageAiKey }) {
+  // 1. Process Model Swap via Image AI Prompt
+  const finalImageUrl = await processModelSwap(imageUrl, imageAiKey);
+
+  // Download final image buffer for GitHub and Gemini processing
+  const imgRes = await axios.get(finalImageUrl, { responseType: 'arraybuffer' });
+  const imageBase64 = Buffer.from(imgRes.data).toString('base64');
+  const imageMimeType = imgRes.headers['content-type'] || 'image/jpeg';
+
   const content = await generateWithGemini(imageBase64, imageMimeType, focusProduct, geminiApiKey);
   const slug = content.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   
@@ -131,40 +99,27 @@ async function publishToGitHub({ affiliateLink, imageBase64, imageMimeType, focu
   await putGitHubFile(imagePath, imageBase64, `Add image ${slug}`);
   
   const html = buildHtml(content.title, content.description, affiliateLink, `${siteUrl}/${imagePath}`, content.hashtags);
-  const htmlBase64 = Buffer.from(html).toString("base64");
-  await putGitHubFile(pagePath, htmlBase64, `Add landing page ${slug}`);
+  await putGitHubFile(pagePath, Buffer.from(html).toString("base64"), `Add landing page ${slug}`);
 
-  const pubDate = new Date().toUTCString();
-  const rssItem = buildRssItem({
-    title: content.title,
-    pageUrl: `${siteUrl}/${pagePath}`,
-    description: `${content.description} \n\n ${content.hashtags}`,
-    imageUrl: `${siteUrl}/${imagePath}`,
-    pubDate,
-    altText: content.altText || content.title // Passing altText to RSS
-  });
+  // Update RSS Feed
+  const itemXml = `  <item>
+    <title><![CDATA[${content.title}]]></title>
+    <link>${escapeXml(`${siteUrl}/${pagePath}`)}</link>
+    <guid>${escapeXml(`${siteUrl}/${pagePath}`)}</guid>
+    <description><![CDATA[${content.description} \n\n ${content.hashtags}]]></description>
+    <pubDate>${escapeXml(new Date().toUTCString())}</pubDate>
+    <enclosure url="${escapeXml(`${siteUrl}/${imagePath}`)}" type="image/jpeg" />
+    <altText><![CDATA[${content.altText || content.title}]]></altText>
+  </item>`;
 
   const existingRss = await getGitHubFile("rss.xml");
-  let newRssContent = "";
-  let rssSha = null;
+  let rssContent = existingRss && existingRss.content.includes("</channel>") 
+    ? existingRss.content.replace("</channel>", `${itemXml}\n</channel>`)
+    : `<?xml version="1.0" encoding="UTF-8" ?><rss version="2.0"><channel><title>Styvora RSS</title><link>${siteUrl}</link><description>Bulk</description>${itemXml}</channel></rss>`;
 
-  if (existingRss && existingRss.content.includes("</channel>")) {
-    newRssContent = existingRss.content.replace("</channel>", `${rssItem}\n</channel>`);
-    rssSha = existingRss.sha;
-  } else {
-    newRssContent = buildInitialRss(rssItem, siteUrl);
-    if (existingRss) rssSha = existingRss.sha;
-  }
+  await putGitHubFile("rss.xml", Buffer.from(rssContent).toString("base64"), `Update RSS`, existingRss?.sha);
 
-  await putGitHubFile("rss.xml", Buffer.from(newRssContent).toString("base64"), `Update RSS for ${slug}`, rssSha);
-
-  return {
-    title: content.title,
-    description: content.description,
-    hashtags: content.hashtags,
-    pageUrl: `${siteUrl}/${pagePath}`,
-    affiliateLink
-  };
+  return { title: content.title };
 }
 
 module.exports = { publishToGitHub };
