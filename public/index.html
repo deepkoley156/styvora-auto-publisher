@@ -13,7 +13,7 @@
     .settings-box { display: none; background: #fafafa; border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
     
     label { font-weight: bold; font-size: 14px; display: block; margin-top: 15px; margin-bottom: 5px; }
-    input[type="text"], input[type="url"], input[type="password"], input[type="file"] { width: 100%; padding: 12px; box-sizing: border-box; border-radius: 8px; border: 1px solid #ddd; font-size: 15px; background: #fff; }
+    input[type="text"], input[type="url"], input[type="password"], input[type="file"], input[type="number"] { width: 100%; padding: 12px; box-sizing: border-box; border-radius: 8px; border: 1px solid #ddd; font-size: 15px; background: #fff; }
     
     .toggle-label { display: flex; align-items: center; cursor: pointer; margin-top: 15px; color: #d9534f; font-weight: bold;}
     .toggle-label input { width: auto; margin-right: 10px; transform: scale(1.3); }
@@ -51,7 +51,10 @@
     
     <label for="excelFile">Upload Products Sheet (.xlsx / .xls / .csv)</label>
     <input type="file" id="excelFile" accept=".xlsx, .xls, .csv">
-    <div class="note">ফাইলে অবশই ৩টি Column থাকতে হবে: <b>product link</b>, <b>affiliate link</b>, এবং <b>image</b></div>
+    
+    <label for="skipRows" style="color: #0066cc; margin-top: 20px;">Skip Rows / Already Processed (Optional)</label>
+    <input type="number" id="skipRows" min="0" placeholder="e.g. 16 (Leave blank to start from row 1)">
+    <div class="note" style="color: #0066cc;">Jodi prothom 16-ta product complete thake, tahole ekhabe 16 likhben, system automatic 17-no row theke suru korbe.</div>
     
     <button class="main-btn" onclick="startBulkProcess()" id="submitBtn">Start Bulk Processing</button>
     
@@ -92,6 +95,7 @@
 
     async function startBulkProcess() {
       const fileInput = document.getElementById("excelFile");
+      const skipInput = document.getElementById("skipRows");
       const status = document.getElementById("status");
       const btn = document.getElementById("submitBtn");
       
@@ -114,7 +118,9 @@
       document.getElementById("consoleLog").innerHTML = "";
       btn.disabled = true;
 
-      // Step 1: Upload File to Backend to Parse Rows
+      // Parse skip index input
+      const skipCount = parseInt(skipInput.value) || 0;
+
       const formData = new FormData();
       formData.append("excelFile", fileInput.files[0]);
 
@@ -127,10 +133,14 @@
         }
 
         const products = parseData.products;
-        logToConsole(`Found ${products.length} products in sheet. Starting loop...`);
+        
+        if (skipCount > 0) {
+          logToConsole(`Skipping the first ${skipCount} products as requested...`);
+        }
+        logToConsole(`Total products in sheet: ${products.length}. Starting processing loop from row ${skipCount + 1}...`);
 
-        // Step 2: Loop over each product sequentially
-        for (let i = 0; i < products.length; i++) {
+        // Loop over products starting from skipCount index
+        for (let i = skipCount; i < products.length; i++) {
           status.textContent = `Processing product ${i + 1} of ${products.length}...`;
           logToConsole(`Processing Row ${i + 1}: ${products[i].productLink || products[i].affiliateLink ? 'Valid Link' : 'No Link'}`);
 
@@ -150,13 +160,13 @@
 
           const singleData = await singleRes.json();
           if (singleData.success) {
-            logToConsole(`SUCCESS: ${singleData.title} Published & RSS Updated!`);
+            logToConsole(`SUCCESS Row ${i + 1}: ${singleData.title} Published & RSS Updated!`);
           } else {
             logToConsole(`FAILED Row ${i + 1}: ${singleData.error}`);
           }
         }
 
-        status.textContent = "All products processed successfully!";
+        status.textContent = "All targeted products processed successfully!";
         status.style.color = "green";
 
       } catch (err) {
