@@ -6,10 +6,13 @@
   <title>Styvora Bulk Auto-Publisher</title>
   <style>
     body { font-family: Arial, sans-serif; background: #f7f7f7; padding: 20px; color: #111; }
-    .container { max-width: 600px; background: #fff; padding: 30px; border-radius: 12px; margin: auto; border: 1px solid #e8e8e8; position: relative; }
-    h2 { margin-top: 0; font-size: 24px; }
+    .container { max-width: 600px; background: #fff; padding: 30px; border-radius: 12px; margin: auto; border: 1px solid #e8e8e8; }
     
-    .settings-btn { position: absolute; top: 25px; right: 25px; font-size: 24px; cursor: pointer; background: none; border: none; }
+    /* Header Flexbox Setup */
+    .header-wrap { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    h2 { margin: 0; font-size: 22px; }
+    .settings-btn { font-size: 26px; cursor: pointer; background: none; border: none; padding: 0; }
+    
     .settings-box { display: none; background: #fafafa; border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
     
     label { font-weight: bold; font-size: 14px; display: block; margin-top: 15px; margin-bottom: 5px; }
@@ -34,8 +37,12 @@
 </head>
 <body>
   <div class="container">
-    <button class="settings-btn" onclick="toggleSettings()">⚙️</button>
-    <h2>Styvora Bulk Publisher</h2>
+    
+    <!-- New Header Wrapper -->
+    <div class="header-wrap">
+      <h2>Styvora Bulk Publisher</h2>
+      <button class="settings-btn" onclick="toggleSettings()">⚙️</button>
+    </div>
     
     <!-- Settings Box -->
     <div id="settingsBox" class="settings-box">
