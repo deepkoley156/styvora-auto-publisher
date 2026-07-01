@@ -8,7 +8,6 @@
     body { font-family: Arial, sans-serif; background: #f7f7f7; padding: 20px; color: #111; }
     .container { max-width: 600px; background: #fff; padding: 30px; border-radius: 12px; margin: auto; border: 1px solid #e8e8e8; }
     
-    /* Header Flexbox Setup */
     .header-wrap { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
     h2 { margin: 0; font-size: 22px; }
     .settings-btn { font-size: 26px; cursor: pointer; background: none; border: none; padding: 0; }
@@ -21,7 +20,6 @@
     .toggle-label { display: flex; align-items: center; cursor: pointer; margin-top: 15px; color: #d9534f; font-weight: bold;}
     .toggle-label input { width: auto; margin-right: 10px; transform: scale(1.3); }
 
-    /* Button Styles */
     button { cursor: pointer; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; padding: 15px; width: 100%; }
     .main-btn { margin-top: 20px; background: #111; color: #fff; }
     .save-btn { margin-top: 15px; padding: 10px; background: #333; color: #fff; border-radius: 6px; }
@@ -37,40 +35,36 @@
 </head>
 <body>
   <div class="container">
-    
-    <!-- New Header Wrapper -->
     <div class="header-wrap">
       <h2>Styvora Bulk Publisher</h2>
       <button class="settings-btn" onclick="toggleSettings()">⚙️</button>
     </div>
     
-    <!-- Settings Box -->
     <div id="settingsBox" class="settings-box">
       <label for="geminiKey">Gemini API Key</label>
       <input type="password" id="geminiKey" placeholder="Enter Gemini API Key">
       
-      <label for="imageAiKey">Image AI API Key (Optional)</label>
-      <input type="password" id="imageAiKey" placeholder="Enter Replicate/Stability AI Key">
-
-      <label for="productType">Product Type</label>
+      <label for="productType">AI Prompt Focus (e.g. Traditional Saree)</label>
       <input type="text" id="productType" placeholder="e.g. Saree, Kurti">
       
+      <label for="siteCategory" style="color: #0066cc;">Website Category (Folder Name)</label>
+      <input type="text" id="siteCategory" placeholder="e.g. sarees, jewelry, kurtis">
+      <div class="note" style="margin-top:2px;">এই ফোল্ডারের ভেতরেই প্রোডাক্ট পেজটি সেভ হবে।</div>
+      
       <label class="toggle-label">
-        <input type="checkbox" id="telegramBypass"> Telegram Bypass (Direct Affiliate Link)
+        <input type="checkbox" id="telegramBypass"> Telegram Bypass (Direct Link)
       </label>
 
       <button class="save-btn" onclick="saveSettings()">Save Settings</button>
       <div id="saveStatus" style="color: green; font-size: 12px; margin-top: 5px; display: none;">Settings Saved!</div>
     </div>
     
-    <!-- Main Form: Excel/CSV Upload -->
-    <label for="excelFile">Upload Products Sheet (.xlsx / .xls / .csv)</label>
+    <label for="excelFile">Upload Products Sheet (.xlsx / .csv)</label>
     <input type="file" id="excelFile" accept=".xlsx, .xls, .csv">
     
-    <label for="skipRows" style="color: #0066cc; margin-top: 20px;">Skip Rows / Already Processed (Optional)</label>
-    <input type="number" id="skipRows" min="0" placeholder="e.g. 16 (Leave blank to start from row 1)">
+    <label for="skipRows" style="color: #0066cc; margin-top: 20px;">Skip Rows (Optional)</label>
+    <input type="number" id="skipRows" min="0" placeholder="e.g. 16">
     
-    <!-- Action Buttons -->
     <button class="main-btn" onclick="startBulkProcess()" id="submitBtn">Start Bulk Processing</button>
     <div class="action-buttons">
       <button class="stop-btn" onclick="forceStop()" id="stopBtn">🛑 Force Stop</button>
@@ -82,15 +76,14 @@
   </div>
 
   <script>
-    // Global Variables for State Management
     let globalProductsList = [];
     let currentProcessingIndex = 0;
     let isProcessingActive = false;
 
     document.addEventListener("DOMContentLoaded", () => {
       if (localStorage.getItem("geminiApiKey")) document.getElementById("geminiKey").value = localStorage.getItem("geminiApiKey");
-      if (localStorage.getItem("imageAiKey")) document.getElementById("imageAiKey").value = localStorage.getItem("imageAiKey");
       if (localStorage.getItem("productType")) document.getElementById("productType").value = localStorage.getItem("productType");
+      if (localStorage.getItem("siteCategory")) document.getElementById("siteCategory").value = localStorage.getItem("siteCategory");
       document.getElementById("telegramBypass").checked = localStorage.getItem("telegramBypass") === "true";
     });
 
@@ -101,8 +94,8 @@
 
     function saveSettings() {
       localStorage.setItem("geminiApiKey", document.getElementById("geminiKey").value.trim());
-      localStorage.setItem("imageAiKey", document.getElementById("imageAiKey").value.trim());
       localStorage.setItem("productType", document.getElementById("productType").value.trim());
+      localStorage.setItem("siteCategory", document.getElementById("siteCategory").value.trim());
       localStorage.setItem("telegramBypass", document.getElementById("telegramBypass").checked);
       
       const status = document.getElementById("saveStatus");
@@ -118,26 +111,18 @@
       consoleBox.scrollTop = consoleBox.scrollHeight;
     }
 
-    // Update UI Buttons based on state
     function updateUIState(state) {
       const submitBtn = document.getElementById("submitBtn");
       const stopBtn = document.getElementById("stopBtn");
       const restartBtn = document.getElementById("restartBtn");
 
       if (state === 'running') {
-        submitBtn.style.display = "none";
-        restartBtn.style.display = "none";
-        stopBtn.style.display = "block";
+        submitBtn.style.display = "none"; restartBtn.style.display = "none"; stopBtn.style.display = "block";
       } else if (state === 'paused') {
-        submitBtn.style.display = "none";
-        stopBtn.style.display = "none";
-        restartBtn.style.display = "block";
+        submitBtn.style.display = "none"; stopBtn.style.display = "none"; restartBtn.style.display = "block";
         document.getElementById("restartRowTarget").innerText = currentProcessingIndex + 1;
-      } else if (state === 'finished' || state === 'idle') {
-        submitBtn.style.display = "block";
-        stopBtn.style.display = "none";
-        restartBtn.style.display = "none";
-        submitBtn.disabled = false;
+      } else {
+        submitBtn.style.display = "block"; stopBtn.style.display = "none"; restartBtn.style.display = "none"; submitBtn.disabled = false;
       }
     }
 
@@ -145,29 +130,19 @@
       isProcessingActive = false;
       document.getElementById("status").textContent = "Process Forcefully Stopped!";
       document.getElementById("status").style.color = "red";
-      logToConsole(`🛑 Process intentionally stopped at Row ${currentProcessingIndex + 1}.`, true);
+      logToConsole(`🛑 Process stopped at Row ${currentProcessingIndex + 1}.`, true);
       updateUIState('paused');
     }
 
-    // Step 1: Upload and Parse Excel File
     async function startBulkProcess() {
       const fileInput = document.getElementById("excelFile");
       const skipInput = document.getElementById("skipRows");
-      const status = document.getElementById("status");
-      
       const apiKey = localStorage.getItem("geminiApiKey");
       
-      if (!apiKey) {
-        alert("Please open Settings (⚙️) and save your Gemini API Key first!");
-        return;
-      }
-      if (fileInput.files.length === 0) {
-        alert("Please upload an Excel or CSV file!");
-        return;
-      }
+      if (!apiKey) { alert("Please save Gemini API Key first!"); return; }
+      if (fileInput.files.length === 0) { alert("Please upload a file!"); return; }
 
-      status.textContent = "Parsing File...";
-      status.style.color = "#333";
+      document.getElementById("status").textContent = "Parsing File...";
       document.getElementById("consoleLog").innerHTML = "";
       document.getElementById("submitBtn").disabled = true;
 
@@ -177,36 +152,22 @@
       try {
         const parseRes = await fetch("/api/parse-excel", { method: "POST", body: formData });
         const parseData = await parseRes.json();
-
-        if (!parseData.success || parseData.products.length === 0) {
-          throw new Error(parseData.error || "No valid products found in the file.");
-        }
-
+        if (!parseData.success) throw new Error("No valid products found.");
+        
         globalProductsList = parseData.products;
         currentProcessingIndex = parseInt(skipInput.value) || 0;
-        
-        if (currentProcessingIndex > 0) {
-          logToConsole(`Skipping the first ${currentProcessingIndex} products as requested...`);
-        }
-        logToConsole(`Total products in sheet: ${globalProductsList.length}. Starting from row ${currentProcessingIndex + 1}...`);
-        
-        // Start the Loop
         resumeProcessing();
-
       } catch (err) {
-        status.textContent = "Error parsing file.";
-        status.style.color = "red";
-        logToConsole(`CRITICAL ERROR: ${err.message}`, true);
+        logToConsole(`ERROR: ${err.message}`, true);
         updateUIState('idle');
       }
     }
 
-    // Step 2: The Core Loop (Can be paused and resumed)
     async function resumeProcessing() {
       const status = document.getElementById("status");
       const apiKey = localStorage.getItem("geminiApiKey");
-      const imageAiKey = localStorage.getItem("imageAiKey") || "";
       const productType = localStorage.getItem("productType") || "Fashion Product";
+      const siteCategory = localStorage.getItem("siteCategory") || "products";
       const isBypass = localStorage.getItem("telegramBypass") === "true";
 
       isProcessingActive = true;
@@ -217,8 +178,8 @@
         const product = globalProductsList[currentProcessingIndex];
         const rowNum = currentProcessingIndex + 1;
         
-        status.textContent = `Processing product ${rowNum} of ${globalProductsList.length}...`;
-        logToConsole(`Processing Row ${rowNum}: ${product.productLink || product.affiliateLink ? 'Initiating' : 'No Link'}`);
+        status.textContent = `Processing product ${rowNum}...`;
+        logToConsole(`Processing Row ${rowNum}...`);
 
         try {
           const singleRes = await fetch("/api/publish-single", {
@@ -229,43 +190,30 @@
               affiliateLink: product.affiliateLink,
               imageUrl: product.image,
               focusProduct: productType,
+              siteCategory: siteCategory, // New Field Passed to Backend
               geminiApiKey: apiKey,
-              imageAiKey: imageAiKey,
               telegramBypass: isBypass
             })
           });
 
           const singleData = await singleRes.json();
-          
           if (singleData.success) {
-            logToConsole(`✅ SUCCESS Row ${rowNum}: ${singleData.title} Published!`);
-            currentProcessingIndex++; // Only move to next if successful
+            logToConsole(`✅ SUCCESS: Published to /${siteCategory}/ folder!`);
+            currentProcessingIndex++;
           } else {
-            // IF FAILED: Stop the process automatically
             isProcessingActive = false;
-            logToConsole(`❌ FAILED Row ${rowNum}: ${singleData.error}`, true);
-            logToConsole(`⚠️ System auto-paused at Row ${rowNum}. Click 'Restart' to try this row again.`, true);
-            status.textContent = `Failed at Row ${rowNum}. System Paused.`;
-            status.style.color = "red";
-            updateUIState('paused');
-            return; // Break out of the function
+            logToConsole(`❌ FAILED: ${singleData.error}`, true);
+            updateUIState('paused'); return;
           }
         } catch (error) {
-          // IF NETWORK ERROR: Stop the process automatically
           isProcessingActive = false;
-          logToConsole(`❌ CRITICAL ERROR Row ${rowNum}: ${error.message}`, true);
-          status.textContent = `Network Error at Row ${rowNum}. System Paused.`;
-          status.style.color = "red";
-          updateUIState('paused');
-          return; // Break out of the function
+          logToConsole(`❌ ERROR: ${error.message}`, true);
+          updateUIState('paused'); return;
         }
       }
-
-      // If loop finishes completely
       if (currentProcessingIndex >= globalProductsList.length) {
-        status.textContent = "All targeted products processed successfully!";
+        status.textContent = "Finished successfully!";
         status.style.color = "green";
-        logToConsole("🎉 Bulk processing completed!");
         updateUIState('finished');
       }
     }
