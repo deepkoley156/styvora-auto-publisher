@@ -4,7 +4,6 @@ function escapeXml(unsafe) {
   return String(unsafe || "").replace(/[<>&'"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '\'': '&apos;', '"': '&quot;' }[c]));
 }
 
-// 🚀 আপনার নতুন ওয়েবসাইটের ডিজাইনে তৈরি প্রোডাক্ট পেজ
 function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -17,7 +16,6 @@ function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
         body { font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #fbfbfb; color: #1a1a1a; line-height: 1.6; }
         a { text-decoration: none; color: inherit; transition: all 0.3s ease; }
 
-        /* Header Style from your website */
         header { display: flex; justify-content: space-between; align-items: center; padding: 15px 8%; background-color: #ffffff; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02); position: sticky; top: 0; z-index: 1000; }
         .logo-container { display: flex; align-items: center; gap: 12px; }
         .brand-logo { height: 45px; width: 45px; object-fit: cover; border-radius: 50%; }
@@ -26,7 +24,6 @@ function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
         nav ul li a { font-size: 13px; font-weight: 500; text-transform: uppercase; letter-spacing: 1.5px; color: #555555; }
         nav ul li a:hover { color: #000000; }
 
-        /* Product Specific Style */
         .product-section { max-width: 800px; margin: 60px auto; padding: 40px; background: #ffffff; border: 1px solid #eeeeee; box-shadow: 0 10px 30px rgba(0,0,0,0.02); text-align: center; }
         .product-image { max-width: 100%; max-height: 600px; object-fit: cover; border-radius: 4px; margin-bottom: 30px; }
         .product-title { font-size: 28px; font-weight: 400; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 20px; }
@@ -36,7 +33,6 @@ function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
         .cta-btn { display: inline-block; padding: 15px 40px; background-color: #111111; color: #ffffff; font-size: 13px; text-transform: uppercase; letter-spacing: 2px; font-weight: 600; }
         .cta-btn:hover { background-color: #333333; letter-spacing: 2.5px; }
 
-        /* Footer */
         footer { background-color: #111111; color: #ffffff; text-align: center; padding: 50px 20px; margin-top: 60px;}
         footer p { font-size: 13px; letter-spacing: 1.5px; color: #999999; }
 
@@ -79,8 +75,7 @@ function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
 }
 
 async function generateWithGemini(imageBase64, imageMimeType, focusProduct, geminiApiKey) {
-  const prompt = `
-  You are an expert Pinterest marketer for women's fashion. Focus: ${focusProduct}.
+  const prompt = `You are an expert Pinterest marketer for women's fashion. Focus: ${focusProduct}.
   CRITICAL: If jewelry, call it artificial/gold-plated. Never real gold.
   Return JSON: {"title": "catchy", "description": "2 lines description", "hashtags": "#tag1", "altText": "Brief visual details, STRICTLY UNDER 400 chars."}`;
 
@@ -106,6 +101,61 @@ async function putGitHubFile(path, contentBase64, message, sha = null) {
   await axios.put(url, body, { headers: { Authorization: `Bearer ${process.env.GITHUB_TOKEN}`, Accept: "application/vnd.github+json" } });
 }
 
+// 🚀 ম্যাজিক ফাংশন: স্বয়ংক্রিয়ভাবে হোমপেজ আপডেট করবে এবং AI ডেসক্রিপশন লিখবে
+async function updateHomepageWithCategory(siteCategory, categoryFolder, geminiApiKey) {
+  if (!siteCategory || siteCategory.toLowerCase() === "products" || siteCategory.toLowerCase() === "sarees" || siteCategory.toLowerCase() === "jewelry") return; 
+  
+  const indexFile = await getGitHubFile("index.html");
+  if (!indexFile) return;
+
+  let indexHtml = indexFile.content;
+  
+  // চেক করা হচ্ছে যে ক্যাটাগরিটি হোমপেজে আগে থেকেই আছে কি না
+  if (indexHtml.includes(`/${categoryFolder}`)) {
+    return;
+  }
+
+  console.log(`Generating AI description for new category: ${siteCategory}`);
+  
+  let catDesc = "Discover our exclusive new arrivals tailored for your elegant lifestyle.";
+  try {
+    // Gemini-কে দিয়ে ক্যাটাগরির ডেসক্রিপশন লেখানো
+    const prompt = `You are a premium fashion copywriter. Write a very short, engaging 1-line description (maximum 10 words) for a women's fashion website category named '${siteCategory}'. Do not use quotes or hashtags.`;
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
+      { contents: [{ parts: [{ text: prompt }] }] }
+    );
+    catDesc = response.data.candidates[0].content.parts[0].text.replace(/["\n]/g, "").trim();
+  } catch (e) {
+    console.error("AI Category Gen failed, using default description.");
+  }
+
+  // ১. নেভিগেশন বারে (মেনুতে) নতুন লিংক যোগ করা
+  const navRegex = /<\/ul>\s*<\/nav>/i;
+  const navHtml = `    <li><a href="https://styvorafashion.com/${categoryFolder}">${siteCategory.toUpperCase()}</a></li>\n            </ul>\n        </nav>`;
+  indexHtml = indexHtml.replace(navRegex, navHtml);
+
+  // ২. হোমপেজের ক্যাটাগরি গ্রিডে (Category Grid) নতুন কার্ড যোগ করা
+  const markerRegex = /<\/div>\s*<!-- New More Categories Link -->/i;
+  const newCardHtml = `
+            <div class="collection-card">
+                <a href="https://styvorafashion.com/${categoryFolder}" style="display:block; text-decoration:none; color:inherit;">
+                    <h3>${siteCategory.toUpperCase()}</h3>
+                    <p>${catDesc}</p>
+                    <span style="font-size: 11px; font-weight: bold; border-bottom: 1px solid #111; margin-top: 15px; display: inline-block;">EXPLORE &rarr;</span>
+                </a>
+            </div>
+        </div>
+        
+        <!-- New More Categories Link -->`;
+
+  if (markerRegex.test(indexHtml)) {
+     indexHtml = indexHtml.replace(markerRegex, newCardHtml);
+     await putGitHubFile("index.html", Buffer.from(indexHtml).toString("base64"), `Auto-added category ${siteCategory} to homepage`, indexFile.sha);
+     console.log(`Homepage dynamically updated with ${siteCategory}!`);
+  }
+}
+
 async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCategory, geminiApiKey }) {
   const imgRes = await axios.get(imageUrl, { responseType: 'arraybuffer' });
   const imageBase64 = Buffer.from(imgRes.data).toString('base64');
@@ -113,25 +163,19 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
 
   const content = await generateWithGemini(imageBase64, imageMimeType, focusProduct, geminiApiKey);
   
-  // URL and Path Generation (Using Category Folder)
   const slug = content.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   const categoryFolder = (siteCategory || "products").toLowerCase().replace(/[^a-z0-9]+/g, "");
   
-  const siteUrl = "https://styvorafashion.com"; // Your Custom Domain!
-  
-  // Paths structure: e.g. sarees/images/red-saree.jpg and sarees/red-saree.html
+  const siteUrl = "https://styvorafashion.com"; 
   const imagePath = `${categoryFolder}/images/${slug}.jpg`;
   const pagePath = `${categoryFolder}/${slug}.html`;
-  
   const fullImageUrl = `${siteUrl}/${imagePath}`;
   const fullPageUrl = `${siteUrl}/${pagePath}`;
 
-  // Upload to GitHub Repo
   await putGitHubFile(imagePath, imageBase64, `Add image to ${categoryFolder}`);
   const html = buildHtml(content.title, content.description, affiliateLink, fullImageUrl, content.hashtags);
   await putGitHubFile(pagePath, Buffer.from(html).toString("base64"), `Add page to ${categoryFolder}`);
 
-  // Update RSS Feed at root
   const itemXml = `  <item>
     <title><![CDATA[${content.title}]]></title>
     <link>${escapeXml(fullPageUrl)}</link>
@@ -148,6 +192,9 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
     : `<?xml version="1.0" encoding="UTF-8" ?><rss version="2.0"><channel><title>Styvora Collections</title><link>${siteUrl}</link><description>Latest Arrivals</description>${itemXml}</channel></rss>`;
 
   await putGitHubFile("rss.xml", Buffer.from(rssContent).toString("base64"), `Update RSS for ${categoryFolder}`, existingRss?.sha);
+  
+  // কল করা হচ্ছে নতুন হোমপেজ আপডেটার ফাংশনটি
+  await updateHomepageWithCategory(siteCategory, categoryFolder, geminiApiKey);
 
   return { title: content.title };
 }
