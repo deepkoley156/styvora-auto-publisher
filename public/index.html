@@ -222,7 +222,7 @@
             // 🚀 NEW: Auto-Cooldown Feature to prevent GitHub Server Queue Jam
             if (currentProcessingIndex < globalProductsList.length && isProcessingActive) {
               logToConsole(`⏳ GitHub server-ke thanda korar jonno 10 second opekkha kora hocche...`);
-              let waitTime = 10; // 10 Seconds Wait Time
+              let waitTime = 30; // 30 Seconds Wait Time
               for (let w = waitTime; w > 0; w--) {
                 if (!isProcessingActive) break; // If user clicks Force Stop during cooldown
                 status.textContent = `Cooling down... ${w} seconds remaining for next product...`;
