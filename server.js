@@ -5,13 +5,12 @@ const multer = require("multer");
 const xlsx = require("xlsx");
 const { publishToGitHub } = require("./publisher");
 
-// Telegram module load (if bypass is off)
 let sendLinkToBot;
 try {
   const telegramModule = require("./telegram");
   sendLinkToBot = telegramModule.sendLinkToBot;
 } catch (e) {
-  console.log("Telegram module skipped.");
+  console.log("Telegram module code skipped or not found.");
 }
 
 dotenv.config();
@@ -24,7 +23,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, "public")));
 
-// Endpoint 1: Parse Excel/CSV Rows
+// Endpoint 1: Parse uploaded Excel file columns
 app.post("/api/parse-excel", upload.single("excelFile"), (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ success: false, error: "No file uploaded." });
@@ -50,42 +49,41 @@ app.post("/api/parse-excel", upload.single("excelFile"), (req, res) => {
   }
 });
 
-// Endpoint 2: Process Single Row (with category support)
+// Endpoint 2: Process a Single Product Row loop step
 app.post("/api/publish-single", async (req, res) => {
   try {
-    const { productUrl, focusProduct, geminiApiKey, telegramBypass, siteCategory } = req.body;
+    const { productUrl, focusProduct, geminiApiKey, telegramBypass, siteCategory, categoryImageUrl } = req.body;
     let { affiliateLink, imageUrl } = req.body;
 
     if (!geminiApiKey || !imageUrl) {
       return res.status(400).json({ success: false, error: "Missing required details." });
     }
 
-    // If Telegram Bypass is OFF, fetch dynamically
     if (!telegramBypass && productUrl && sendLinkToBot) {
-      console.log("Fetching Affiliate link from Telegram...");
+      console.log("Fetching dynamic affiliate link from Bot channel...");
       const botResult = await sendLinkToBot(productUrl);
       if (botResult && botResult.affiliateLink) {
         affiliateLink = botResult.affiliateLink;
       }
     }
 
-    // Call the updated GitHub publisher with siteCategory
     const result = await publishToGitHub({
       affiliateLink,
       imageUrl,
       focusProduct,
-      siteCategory, // Passing the website category/folder name
+      siteCategory, 
+      categoryImageUrl,
       geminiApiKey
     });
 
     res.json({ success: true, ...result });
 
   } catch (error) {
-    console.error("Row process failed:", error.message);
+    console.error("Publish execution error:", error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server running smoothly on port ${PORT}`);
 });
