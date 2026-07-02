@@ -4,7 +4,7 @@ function escapeXml(unsafe) {
   return String(unsafe || "").replace(/[<>&'"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '\'': '&apos;', '"': '&quot;' }[c]));
 }
 
-// 1. Product Landing Page Template
+// Template 1: Product Landing Page Style
 function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -49,8 +49,7 @@ function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
         <nav>
             <ul>
                 <li><a href="https://styvorafashion.com/">Home</a></li>
-                <li><a href="https://styvorafashion.com/sarees">Sarees</a></li>
-                <li><a href="https://styvorafashion.com/jewelry">Jewelry</a></li>
+                <li><a href="https://styvorafashion.com/contact">Contact</a></li>
             </ul>
         </nav>
     </header>
@@ -66,7 +65,7 @@ function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
 </html>`;
 }
 
-// 2. AI Content Generation
+// AI Engine Processing (Pinterest Rules Applied)
 async function generateWithGemini(imageBase64, imageMimeType, focusProduct, geminiApiKey) {
   const prompt = `You are an expert Pinterest marketer for women's fashion. Focus: ${focusProduct}.
   CRITICAL: If jewelry, call it artificial/gold-plated. Never real gold.
@@ -80,7 +79,7 @@ async function generateWithGemini(imageBase64, imageMimeType, focusProduct, gemi
   return JSON.parse(text);
 }
 
-// GitHub Utility Functions
+// GitHub Core Helpers
 async function getGitHubFile(path) {
   const url = `https://api.github.com/repos/${process.env.GITHUB_USERNAME}/${process.env.GITHUB_REPO}/contents/${path}`;
   try {
@@ -95,9 +94,9 @@ async function putGitHubFile(path, contentBase64, message, sha = null) {
   await axios.put(url, body, { headers: { Authorization: `Bearer ${process.env.GITHUB_TOKEN}`, Accept: "application/vnd.github+json" } });
 }
 
-// 3. Update Homepage
-async function updateHomepageWithCategory(siteCategory, categoryFolder, geminiApiKey) {
-  if (!siteCategory || siteCategory.toLowerCase() === "products" || siteCategory.toLowerCase() === "sarees" || siteCategory.toLowerCase() === "jewelry") return; 
+// Dynamic Homepage Configuration Logic
+async function updateHomepageWithCategory(siteCategory, categoryFolder, categoryImageUrl, geminiApiKey) {
+  if (!siteCategory || siteCategory.toLowerCase() === "products") return; 
   
   const indexFile = await getGitHubFile("index.html");
   if (!indexFile) return;
@@ -115,22 +114,28 @@ async function updateHomepageWithCategory(siteCategory, categoryFolder, geminiAp
     catDesc = response.data.candidates[0].content.parts[0].text.replace(/["\n]/g, "").trim();
   } catch (e) {}
 
+  // Navbar Dynamic category insert
   const navRegex = /<\/ul>\s*<\/nav>/i;
   const navHtml = `    <li><a href="https://styvorafashion.com/${categoryFolder}">${siteCategory.toUpperCase()}</a></li>\n            </ul>\n        </nav>`;
   indexHtml = indexHtml.replace(navRegex, navHtml);
 
-  const markerRegex = /<\/div>\s*<!-- New More Categories Link -->/i;
+  // Background Image Overlay setup
+  const bgStyle = categoryImageUrl 
+    ? `background-image: linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.95)), url('${categoryImageUrl}'); background-size: cover; background-position: center;`
+    : `background: #ffffff;`;
+
+  const markerRegex = /<\/div>\s*/i;
   const newCardHtml = `
-            <div class="collection-card">
+            <div class="collection-card" style="${bgStyle} border: 1px solid #eeeeee; padding: 50px 30px; transition: transform 0.3s; text-align: center;">
                 <a href="https://styvorafashion.com/${categoryFolder}" style="display:block; text-decoration:none; color:inherit;">
-                    <h3>${siteCategory.toUpperCase()}</h3>
-                    <p>${catDesc}</p>
+                    <h3 style="font-size: 20px; font-weight: 500; margin-bottom: 15px; letter-spacing: 1.5px; text-transform: uppercase;">${siteCategory.toUpperCase()}</h3>
+                    <p style="font-size: 14px; color: #555;">${catDesc}</p>
                     <span style="font-size: 11px; font-weight: bold; border-bottom: 1px solid #111; margin-top: 15px; display: inline-block;">EXPLORE &rarr;</span>
                 </a>
             </div>
         </div>
         
-        <!-- New More Categories Link -->`;
+        `;
 
   if (markerRegex.test(indexHtml)) {
      indexHtml = indexHtml.replace(markerRegex, newCardHtml);
@@ -138,14 +143,13 @@ async function updateHomepageWithCategory(siteCategory, categoryFolder, geminiAp
   }
 }
 
-// 🚀 4. NEW FEATURE: Update Category Storefront Page
+// Category Storefront Grid Auto-builder
 async function updateCategoryStorefront(siteCategory, categoryFolder, productTitle, fullImageUrl, fullPageUrl) {
   const catIndexPath = `${categoryFolder}/index.html`;
   const existingCatFile = await getGitHubFile(catIndexPath);
   
-  // প্রোডাক্ট কার্ড ডিজাইন
   const productCardHtml = `
-            <div class="collection-card" style="padding: 15px; text-align: center;">
+            <div class="collection-card" style="padding: 15px; text-align: center; background: #ffffff; border: 1px solid #eeeeee;">
                 <a href="${fullPageUrl}" style="text-decoration:none; color:inherit;">
                     <img src="${fullImageUrl}" alt="${productTitle}" style="width: 100%; height: 320px; object-fit: cover; border-radius: 8px; margin-bottom: 15px;">
                     <h3 style="font-size: 16px; font-weight: 500; margin-bottom: 10px; text-transform: uppercase;">${productTitle}</h3>
@@ -156,10 +160,8 @@ async function updateCategoryStorefront(siteCategory, categoryFolder, productTit
   let htmlContent = "";
 
   if (existingCatFile && existingCatFile.content.includes('<div class="collection-grid">')) {
-    // ক্যাটাগরি পেজ আগে থেকেই থাকলে নতুন প্রোডাক্টটি শুরুতে অ্যাড হবে
     htmlContent = existingCatFile.content.replace(/(<div class="collection-grid">)/i, `$1\n${productCardHtml}`);
   } else {
-    // ক্যাটাগরি পেজ না থাকলে নতুন করে ডিজাইন তৈরি করবে
     htmlContent = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -182,7 +184,7 @@ async function updateCategoryStorefront(siteCategory, categoryFolder, productTit
         .category-header p { font-size: 16px; color: #666666; max-width: 600px; margin: auto; }
         .products-container { padding: 60px 8%; }
         .collection-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 30px; max-width: 1200px; margin: 0 auto; }
-        .collection-card { background: #ffffff; border: 1px solid #eeeeee; transition: transform 0.3s; }
+        .collection-card { transition: transform 0.3s; }
         .collection-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
         footer { background-color: #111111; color: #ffffff; text-align: center; padding: 50px 20px; margin-top: 60px;}
         footer p { font-size: 13px; letter-spacing: 1.5px; color: #999999; }
@@ -201,15 +203,14 @@ async function updateCategoryStorefront(siteCategory, categoryFolder, productTit
         <nav>
             <ul>
                 <li><a href="https://styvorafashion.com/">Home</a></li>
-                <li><a href="https://styvorafashion.com/sarees">Sarees</a></li>
-                <li><a href="https://styvorafashion.com/jewelry">Jewelry</a></li>
+                <li><a href="https://styvorafashion.com/contact">Contact</a></li>
             </ul>
         </nav>
     </header>
 
     <div class="category-header">
-        <h1>${siteCategory}</h1>
-        <p>Explore our exclusive collection of ${siteCategory.toLowerCase()}.</p>
+        <h1>${siteCategory.toUpperCase()}</h1>
+        <p>Explore our exclusive collection of premium ${siteCategory.toLowerCase()}.</p>
     </div>
 
     <section class="products-container">
@@ -223,11 +224,11 @@ async function updateCategoryStorefront(siteCategory, categoryFolder, productTit
 </html>`;
   }
   
-  await putGitHubFile(catIndexPath, Buffer.from(htmlContent).toString("base64"), `Update category page for ${siteCategory}`, existingCatFile?.sha);
+  await putGitHubFile(catIndexPath, Buffer.from(htmlContent).toString("base64"), `Update storefront list index for ${siteCategory}`, existingCatFile?.sha);
 }
 
-// 5. Main Publishing Function
-async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCategory, geminiApiKey }) {
+// Main Controller
+async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCategory, categoryImageUrl, geminiApiKey }) {
   const imgRes = await axios.get(imageUrl, { responseType: 'arraybuffer' });
   const imageBase64 = Buffer.from(imgRes.data).toString('base64');
   const imageMimeType = imgRes.headers['content-type'] || 'image/jpeg';
@@ -243,12 +244,12 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
   const fullImageUrl = `${siteUrl}/${imagePath}`;
   const fullPageUrl = `${siteUrl}/${pagePath}`;
 
-  // Upload Product HTML & Image
+  // Upload Landing assets
   await putGitHubFile(imagePath, imageBase64, `Add image to ${categoryFolder}`);
   const html = buildHtml(content.title, content.description, affiliateLink, fullImageUrl, content.hashtags);
-  await putGitHubFile(pagePath, Buffer.from(html).toString("base64"), `Add page to ${categoryFolder}`);
+  await putGitHubFile(pagePath, Buffer.from(html).toString("base64"), `Add landing page to ${categoryFolder}`);
 
-  // Update RSS Feed
+  // Update Main Core RSS feed
   const itemXml = `  <item>
     <title><![CDATA[${content.title}]]></title>
     <link>${escapeXml(fullPageUrl)}</link>
@@ -264,12 +265,10 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
     ? existingRss.content.replace("</channel>", `${itemXml}\n</channel>`)
     : `<?xml version="1.0" encoding="UTF-8" ?><rss version="2.0"><channel><title>Styvora Collections</title><link>${siteUrl}</link><description>Latest Arrivals</description>${itemXml}</channel></rss>`;
 
-  await putGitHubFile("rss.xml", Buffer.from(rssContent).toString("base64"), `Update RSS for ${categoryFolder}`, existingRss?.sha);
+  await putGitHubFile("rss.xml", Buffer.from(rssContent).toString("base64"), `Update RSS feed for ${categoryFolder}`, existingRss?.sha);
   
-  // Update Homepage
-  await updateHomepageWithCategory(siteCategory, categoryFolder, geminiApiKey);
-
-  // 🚀 Update the Category Storefront Page
+  // Update website files
+  await updateHomepageWithCategory(siteCategory, categoryFolder, categoryImageUrl, geminiApiKey);
   await updateCategoryStorefront(siteCategory, categoryFolder, content.title, fullImageUrl, fullPageUrl);
 
   return { title: content.title };
