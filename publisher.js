@@ -105,7 +105,7 @@ async function updateHomepageWithCategory(siteCategory, categoryFolder, category
 
   // Background Image Overlay setup
   const bgStyle = categoryImageUrl 
-    ? `background-image: linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.95)), url('${categoryImageUrl}'); background-size: cover; background-position: center;`
+    ? `background-image: linear-gradient(rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.6)), url('${categoryImageUrl}'); background-size: cover; background-position: center;`
     : `background: #ffffff;`;
 
   // 🚀 MAGIC WORK: Category jodi ager theke thake, tobe tar background image force update korbe
