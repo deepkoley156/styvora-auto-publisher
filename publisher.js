@@ -267,7 +267,7 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
     <guid>${escapeXml(fullPageUrl)}</guid>
     <description><![CDATA[${content.description} \n\n ${content.hashtags}]]></description>
     <pubDate>${escapeXml(new Date().toUTCString())}</pubDate>
-    <enclosure url="${escapeXml(fullImageUrl)}" type="image/jpeg" />
+    <enclosure url="${escapeXml(fullImageUrl)}" length="1024" type="image/jpeg" />
     <altText><![CDATA[${content.altText || content.title}]]></altText>
   </item>`;
 
