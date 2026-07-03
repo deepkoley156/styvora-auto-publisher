@@ -65,7 +65,7 @@ function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
 </html>`;
 }
 
-// AI Engine Processing (Pinterest Rules Applied)
+// AI Engine Input Framework
 async function generateWithGemini(imageBase64, imageMimeType, focusProduct, geminiApiKey) {
   const prompt = `You are an expert Pinterest marketer for women's fashion. Focus: ${focusProduct}.
   CRITICAL: If jewelry, call it artificial/gold-plated. Never real gold.
@@ -79,7 +79,7 @@ async function generateWithGemini(imageBase64, imageMimeType, focusProduct, gemi
   return JSON.parse(text);
 }
 
-// GitHub Core Helpers
+// GitHub Core Fetchers
 async function getGitHubFile(path) {
   const url = `https://api.github.com/repos/${process.env.GITHUB_USERNAME}/${process.env.GITHUB_REPO}/contents/${path}`;
   try {
@@ -94,7 +94,7 @@ async function putGitHubFile(path, contentBase64, message, sha = null) {
   await axios.put(url, body, { headers: { Authorization: `Bearer ${process.env.GITHUB_TOKEN}`, Accept: "application/vnd.github+json" } });
 }
 
-// Dynamic Homepage Configuration Logic
+// Dynamic Homepage Configuration Logic (Fixed for background image overwrite)
 async function updateHomepageWithCategory(siteCategory, categoryFolder, categoryImageUrl, geminiApiKey) {
   if (!siteCategory || siteCategory.toLowerCase() === "products") return; 
   
@@ -102,7 +102,24 @@ async function updateHomepageWithCategory(siteCategory, categoryFolder, category
   if (!indexFile) return;
 
   let indexHtml = indexFile.content;
-  if (indexHtml.includes(`/${categoryFolder}`)) return;
+
+  // Background Image Overlay setup
+  const bgStyle = categoryImageUrl 
+    ? `background-image: linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.95)), url('${categoryImageUrl}'); background-size: cover; background-position: center;`
+    : `background: #ffffff;`;
+
+  // 🚀 MAGIC WORK: Category jodi ager theke thake, tobe tar background image force update korbe
+  if (indexHtml.includes(`https://styvorafashion.com/${categoryFolder}`)) {
+    console.log(`Category ${siteCategory} already exists. Forcing style background image refresh...`);
+    const cardPattern = new RegExp(`(<div class="collection-card" style=")[^"]*(">[\\s\\S]*?<a href="https://styvorafashion.com/${categoryFolder}")`, "i");
+    
+    if (cardPattern.test(indexHtml)) {
+       indexHtml = indexHtml.replace(cardPattern, `$1${bgStyle} border: 1px solid #eeeeee; padding: 50px 30px; transition: transform 0.3s; text-align: center;$2`);
+       await putGitHubFile("index.html", Buffer.from(indexHtml).toString("base64"), `Auto-updated image background for category ${siteCategory}`, indexFile.sha);
+       console.log("Category image link injected successfully!");
+    }
+    return;
+  }
 
   let catDesc = "Discover our exclusive new arrivals tailored for your elegant lifestyle.";
   try {
@@ -114,16 +131,12 @@ async function updateHomepageWithCategory(siteCategory, categoryFolder, category
     catDesc = response.data.candidates[0].content.parts[0].text.replace(/["\n]/g, "").trim();
   } catch (e) {}
 
-  // Navbar Dynamic category insert
+  // Navbar Dynamic category link insert
   const navRegex = /<\/ul>\s*<\/nav>/i;
   const navHtml = `    <li><a href="https://styvorafashion.com/${categoryFolder}">${siteCategory.toUpperCase()}</a></li>\n            </ul>\n        </nav>`;
   indexHtml = indexHtml.replace(navRegex, navHtml);
 
-  // Background Image Overlay setup
-  const bgStyle = categoryImageUrl 
-    ? `background-image: linear-gradient(rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0.95)), url('${categoryImageUrl}'); background-size: cover; background-position: center;`
-    : `background: #ffffff;`;
-
+  // Grid Injection
   const markerRegex = /<\/div>\s*/i;
   const newCardHtml = `
             <div class="collection-card" style="${bgStyle} border: 1px solid #eeeeee; padding: 50px 30px; transition: transform 0.3s; text-align: center;">
@@ -244,12 +257,10 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
   const fullImageUrl = `${siteUrl}/${imagePath}`;
   const fullPageUrl = `${siteUrl}/${pagePath}`;
 
-  // Upload Landing assets
   await putGitHubFile(imagePath, imageBase64, `Add image to ${categoryFolder}`);
   const html = buildHtml(content.title, content.description, affiliateLink, fullImageUrl, content.hashtags);
   await putGitHubFile(pagePath, Buffer.from(html).toString("base64"), `Add landing page to ${categoryFolder}`);
 
-  // Update Main Core RSS feed
   const itemXml = `  <item>
     <title><![CDATA[${content.title}]]></title>
     <link>${escapeXml(fullPageUrl)}</link>
@@ -267,7 +278,7 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
 
   await putGitHubFile("rss.xml", Buffer.from(rssContent).toString("base64"), `Update RSS feed for ${categoryFolder}`, existingRss?.sha);
   
-  // Update website files
+  // Update website files (Image variables injected correctly)
   await updateHomepageWithCategory(siteCategory, categoryFolder, categoryImageUrl, geminiApiKey);
   await updateCategoryStorefront(siteCategory, categoryFolder, content.title, fullImageUrl, fullPageUrl);
 
