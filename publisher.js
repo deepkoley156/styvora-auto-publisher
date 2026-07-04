@@ -74,11 +74,22 @@ function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
 </html>`;
 }
 
-// AI Engine Input Framework
+// AI Engine Input Framework (UPDATED FOR INDIAN MARKET SEO)
 async function generateWithGemini(imageBase64, imageMimeType, focusProduct, geminiApiKey) {
-  const prompt = `You are an expert Pinterest marketer for women's fashion. Focus: ${focusProduct}.
-  CRITICAL: If jewelry, call it artificial/gold-plated. Never real gold.
-  Return JSON: {"title": "catchy", "description": "2 lines description", "hashtags": "#tag1", "altText": "Brief visual details, STRICTLY UNDER 400 chars."}`;
+  const prompt = `Act as an Expert SEO Manager and Copywriter for women's fashion in India. I am providing you with a focus product: ${focusProduct}. 
+  CRITICAL RULE: If it is jewelry, call it artificial/gold-plated. Never real gold.
+
+  First, perform internal keyword research and identify 5 high-search-volume, low-competition long-tail keywords specifically suitable for the Indian fashion and jewelry market (exactly what Indian buyers search for online). 
+
+  Then, write the content by seamlessly and naturally integrating those 5 keywords. Do not do keyword stuffing, make it sound highly professional and persuasive for Indian buyers.
+
+  Please strictly provide the final output in valid JSON format exactly like the structure below:
+  {
+    "title": "Your SEO optimized catchy title here",
+    "description": "Your SEO optimized full product description here (make it highly engaging)",
+    "hashtags": "List of SEO optimized hashtags here (e.g., #fashionindia #indianjewelry)",
+    "altText": "Your SEO optimized image alt text here, STRICTLY UNDER 400 chars."
+  }`;
 
   const response = await axios.post(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
@@ -103,7 +114,7 @@ async function putGitHubFile(path, contentBase64, message, sha = null) {
   await axios.put(url, body, { headers: { Authorization: `Bearer ${process.env.GITHUB_TOKEN}`, Accept: "application/vnd.github+json" } });
 }
 
-// Dynamic Homepage Configuration Logic (Fixed for background image overwrite)
+// Dynamic Homepage Configuration Logic
 async function updateHomepageWithCategory(siteCategory, categoryFolder, categoryImageUrl, geminiApiKey) {
   if (!siteCategory || siteCategory.toLowerCase() === "products") return; 
   
@@ -117,7 +128,7 @@ async function updateHomepageWithCategory(siteCategory, categoryFolder, category
     ? `background-image: linear-gradient(rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.6)), url('${categoryImageUrl}'); background-size: cover; background-position: center;`
     : `background: #ffffff;`;
 
-  // 🚀 MAGIC WORK: Category jodi ager theke thake, tobe tar background image force update korbe
+  // Force update background image if category exists
   if (indexHtml.includes(`https://styvorafashion.com/${categoryFolder}`)) {
     console.log(`Category ${siteCategory} already exists. Forcing style background image refresh...`);
     const cardPattern = new RegExp(`(<div class="collection-card" style=")[^"]*(">[\\s\\S]*?<a href="https://styvorafashion.com/${categoryFolder}")`, "i");
