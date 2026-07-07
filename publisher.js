@@ -114,7 +114,7 @@ async function putGitHubFile(path, contentBase64, message, sha = null) {
   await axios.put(url, body, { headers: { Authorization: `Bearer ${process.env.GITHUB_TOKEN}`, Accept: "application/vnd.github+json" } });
 }
 
-// Dynamic Homepage Configuration Logic
+// Dynamic Homepage Configuration Logic (FIXED: No Navbar Injection & Correct Grid)
 async function updateHomepageWithCategory(siteCategory, categoryFolder, categoryImageUrl, geminiApiKey) {
   if (!siteCategory || siteCategory.toLowerCase() === "products") return; 
   
@@ -125,16 +125,16 @@ async function updateHomepageWithCategory(siteCategory, categoryFolder, category
 
   // Background Image Overlay setup
   const bgStyle = categoryImageUrl 
-    ? `background-image: linear-gradient(rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.6)), url('${categoryImageUrl}'); background-size: cover; background-position: center;`
+    ? `background-image: linear-gradient(rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.75)), url('${categoryImageUrl}'); background-size: cover; background-position: center;`
     : `background: #ffffff;`;
 
   // Force update background image if category exists
   if (indexHtml.includes(`https://styvorafashion.com/${categoryFolder}`)) {
     console.log(`Category ${siteCategory} already exists. Forcing style background image refresh...`);
-    const cardPattern = new RegExp(`(<div class="collection-card" style=")[^"]*(">[\\s\\S]*?<a href="https://styvorafashion.com/${categoryFolder}")`, "i");
+    const stylePattern = new RegExp(`(<div class="collection-card" style=")[^"]*(">[\\s\\S]*?<a href="https://styvorafashion.com/${categoryFolder}")`, "i");
     
-    if (cardPattern.test(indexHtml)) {
-       indexHtml = indexHtml.replace(cardPattern, `$1${bgStyle} border: 1px solid #eeeeee; padding: 50px 30px; transition: transform 0.3s; text-align: center;$2`);
+    if (stylePattern.test(indexHtml)) {
+       indexHtml = indexHtml.replace(stylePattern, `$1${bgStyle} border: 1px solid #eeeeee; padding: 50px 30px; transition: transform 0.3s; text-align: center;$2`);
        await putGitHubFile("index.html", Buffer.from(indexHtml).toString("base64"), `Auto-updated image background for category ${siteCategory}`, indexFile.sha);
        console.log("Category image link injected successfully!");
     }
@@ -151,27 +151,18 @@ async function updateHomepageWithCategory(siteCategory, categoryFolder, category
     catDesc = response.data.candidates[0].content.parts[0].text.replace(/["\n]/g, "").trim();
   } catch (e) {}
 
-  // Navbar Dynamic category link insert
-  const navRegex = /<\/ul>\s*<\/nav>/i;
-  const navHtml = `    <li><a href="https://styvorafashion.com/${categoryFolder}">${siteCategory.toUpperCase()}</a></li>\n            </ul>\n        </nav>`;
-  indexHtml = indexHtml.replace(navRegex, navHtml);
-
-  // Grid Injection
-  const markerRegex = /<\/div>\s*/i;
+  // Grid Injection (Strictly inserts into the Grid Container, NOT Navbar)
   const newCardHtml = `
             <div class="collection-card" style="${bgStyle} border: 1px solid #eeeeee; padding: 50px 30px; transition: transform 0.3s; text-align: center;">
                 <a href="https://styvorafashion.com/${categoryFolder}" style="display:block; text-decoration:none; color:inherit;">
-                    <h3 style="font-size: 20px; font-weight: 500; margin-bottom: 15px; letter-spacing: 1.5px; text-transform: uppercase;">${siteCategory.toUpperCase()}</h3>
-                    <p style="font-size: 14px; color: #555;">${catDesc}</p>
-                    <span style="font-size: 11px; font-weight: bold; border-bottom: 1px solid #111; margin-top: 15px; display: inline-block;">EXPLORE &rarr;</span>
+                    <h3 style="font-size: 20px; font-weight: 600; margin-bottom: 15px; letter-spacing: 1.5px; text-transform: uppercase; color: #111;">${siteCategory.toUpperCase()}</h3>
+                    <p style="font-size: 14px; color: #333; font-weight: 500;">${catDesc}</p>
+                    <span style="font-size: 11px; font-weight: bold; border-bottom: 1px solid #111; margin-top: 15px; display: inline-block; color: #111;">EXPLORE &rarr;</span>
                 </a>
-            </div>
-        </div>
-        
-        `;
+            </div>`;
 
-  if (markerRegex.test(indexHtml)) {
-     indexHtml = indexHtml.replace(markerRegex, newCardHtml);
+  if (indexHtml.includes('<div class="collection-grid">')) {
+     indexHtml = indexHtml.replace(/(<div class="collection-grid">)/i, `$1\n${newCardHtml}`);
      await putGitHubFile("index.html", Buffer.from(indexHtml).toString("base64"), `Auto-added category ${siteCategory} to homepage`, indexFile.sha);
   }
 }
