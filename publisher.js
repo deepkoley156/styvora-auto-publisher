@@ -9,7 +9,6 @@ function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
-<!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-6GVYZCMMGH"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
@@ -74,21 +73,26 @@ function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
 </html>`;
 }
 
-// AI Engine Input Framework (UPDATED FOR INDIAN MARKET SEO)
+// AI Engine Input Framework (UPDATED WITH STRICT LENGTH LIMITS FOR MAKE.COM)
 async function generateWithGemini(imageBase64, imageMimeType, focusProduct, geminiApiKey) {
   const prompt = `Act as an Expert SEO Manager and Copywriter for women's fashion in India. I am providing you with a focus product: ${focusProduct}. 
   CRITICAL RULE: If it is jewelry, call it artificial/gold-plated. Never real gold.
 
-  First, perform internal keyword research and identify 5 high-search-volume, low-competition long-tail keywords specifically suitable for the Indian fashion and jewelry market (exactly what Indian buyers search for online). 
+  First, perform internal keyword research and identify 5 high-search-volume, low-competition long-tail keywords specifically suitable for the Indian fashion and jewelry market. 
 
-  Then, write the content by seamlessly and naturally integrating those 5 keywords. Do not do keyword stuffing, make it sound highly professional and persuasive for Indian buyers.
+  Then, write the content by seamlessly and naturally integrating those 5 keywords. 
+  
+  CRITICAL LENGTH CONSTRAINTS (MANDATORY):
+  - Make.com and Pinterest APIs have strict limits. You MUST keep the text short.
+  - The 'description' MUST be punchy and STRICTLY UNDER 350 CHARACTERS.
+  - The 'hashtags' MUST be STRICTLY UNDER 100 CHARACTERS.
 
   Please strictly provide the final output in valid JSON format exactly like the structure below:
   {
     "title": "Your SEO optimized catchy title here",
-    "description": "Your SEO optimized full product description here (make it highly engaging)",
-    "hashtags": "List of SEO optimized hashtags here (e.g., #fashionindia #indianjewelry)",
-    "altText": "Your SEO optimized image alt text here, STRICTLY UNDER 400 chars."
+    "description": "Your SEO optimized short product description here (STRICTLY UNDER 350 CHARACTERS)",
+    "hashtags": "List of SEO hashtags here (STRICTLY UNDER 100 CHARACTERS)",
+    "altText": "Your SEO optimized image alt text here (STRICTLY UNDER 300 CHARACTERS)"
   }`;
 
   const response = await axios.post(
