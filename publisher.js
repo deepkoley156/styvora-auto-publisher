@@ -1,5 +1,12 @@
 const axios = require("axios");
 
+// ==========================================
+// PINTEREST UNLIMITED API SETTINGS (NO LIMITS!)
+// ==========================================
+const PINTEREST_ACCESS_TOKEN = "pina_AMAQ4PIYAANTQBAAGCAAYCXTLW6EBHYBQBIQCBDQDOBZW2XISTDE3OISH3HRDZLUK3LG2HPLE7KEJ3D6723XTV2HYGFRIJAA";
+const PINTEREST_BOARD_ID = "724094515028951383";
+// ==========================================
+
 function escapeXml(unsafe) {
   return String(unsafe || "").replace(/[<>&'"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '\'': '&apos;', '"': '&quot;' }[c]));
 }
@@ -74,7 +81,7 @@ function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
 </html>`;
 }
 
-// AI Engine Input Framework (UPDATED WITH NO MARKDOWN RULE)
+// AI Engine Input Framework
 async function generateWithGemini(imageBase64, imageMimeType, focusProduct, geminiApiKey) {
   const prompt = `Act as an Expert SEO Manager and Copywriter for women's fashion in India. I am providing you with a focus product: ${focusProduct}. 
   CRITICAL RULE: If it is jewelry, call it artificial/gold-plated. Never real gold.
@@ -129,20 +136,15 @@ async function updateHomepageWithCategory(siteCategory, categoryFolder, category
 
   let indexHtml = indexFile.content;
 
-  // Background Image Overlay setup
   const bgStyle = categoryImageUrl 
     ? `background-image: linear-gradient(rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.75)), url('${categoryImageUrl}'); background-size: cover; background-position: center;`
     : `background: #ffffff;`;
 
-  // Force update background image if category exists
   if (indexHtml.includes(`https://styvorafashion.com/${categoryFolder}`)) {
-    console.log(`Category ${siteCategory} already exists. Forcing style background image refresh...`);
     const stylePattern = new RegExp(`(<div class="collection-card" style=")[^"]*(">[\\s\\S]*?<a href="https://styvorafashion.com/${categoryFolder}")`, "i");
-    
     if (stylePattern.test(indexHtml)) {
        indexHtml = indexHtml.replace(stylePattern, `$1${bgStyle} border: 1px solid #eeeeee; padding: 50px 30px; transition: transform 0.3s; text-align: center;$2`);
        await putGitHubFile("index.html", Buffer.from(indexHtml).toString("base64"), `Auto-updated image background for category ${siteCategory}`, indexFile.sha);
-       console.log("Category image link injected successfully!");
     }
     return;
   }
@@ -157,7 +159,6 @@ async function updateHomepageWithCategory(siteCategory, categoryFolder, category
     catDesc = response.data.candidates[0].content.parts[0].text.replace(/["\n]/g, "").trim();
   } catch (e) {}
 
-  // Grid Injection (Strictly inserts into the Grid Container, NOT Navbar)
   const newCardHtml = `
             <div class="collection-card" style="${bgStyle} border: 1px solid #eeeeee; padding: 50px 30px; transition: transform 0.3s; text-align: center;">
                 <a href="https://styvorafashion.com/${categoryFolder}" style="display:block; text-decoration:none; color:inherit;">
@@ -295,9 +296,36 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
 
   await putGitHubFile("rss.xml", Buffer.from(rssContent).toString("base64"), `Update RSS feed for ${categoryFolder}`, existingRss?.sha);
   
-  // Update website files (Image variables injected correctly)
   await updateHomepageWithCategory(siteCategory, categoryFolder, categoryImageUrl, geminiApiKey);
   await updateCategoryStorefront(siteCategory, categoryFolder, content.title, fullImageUrl, fullPageUrl);
+
+  // ==========================================
+  // AUTO-PUBLISH TO PINTEREST (NEW!)
+  // ==========================================
+  try {
+    if (PINTEREST_ACCESS_TOKEN && PINTEREST_ACCESS_TOKEN !== "YOUR_PINTEREST_TOKEN_HERE") {
+      const pinData = {
+        board_id: PINTEREST_BOARD_ID,
+        title: content.title.substring(0, 95), 
+        description: `${content.description}\n\n${content.hashtags}`,
+        link: fullPageUrl,
+        media_source: {
+          source_type: "image_url",
+          url: fullImageUrl
+        }
+      };
+      
+      await axios.post('https://api.pinterest.com/v5/pins', pinData, {
+        headers: {
+          'Authorization': `Bearer ${PINTEREST_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      console.log("Successfully Auto-Published to Pinterest!");
+    }
+  } catch (pinErr) {
+    console.error("Pinterest API Error:", pinErr.response ? pinErr.response.data : pinErr.message);
+  }
 
   return { title: content.title };
 }
