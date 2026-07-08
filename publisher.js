@@ -300,10 +300,15 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
   await updateCategoryStorefront(siteCategory, categoryFolder, content.title, fullImageUrl, fullPageUrl);
 
   // ==========================================
-  // AUTO-PUBLISH TO PINTEREST (NEW!)
+  // AUTO-PUBLISH TO PINTEREST (FIXED INSTANT UPLOAD)
   // ==========================================
+  let pinterestStatus = "Success";
   try {
     if (PINTEREST_ACCESS_TOKEN && PINTEREST_ACCESS_TOKEN !== "YOUR_PINTEREST_TOKEN_HERE") {
+      
+      // Using Raw GitHub URL so Pinterest doesn't get a 404 error during the 2-minute delay
+      const rawImageUrl = `https://raw.githubusercontent.com/${process.env.GITHUB_USERNAME}/${process.env.GITHUB_REPO}/main/${imagePath}`;
+
       const pinData = {
         board_id: PINTEREST_BOARD_ID,
         title: content.title.substring(0, 95), 
@@ -311,7 +316,7 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
         link: fullPageUrl,
         media_source: {
           source_type: "image_url",
-          url: fullImageUrl
+          url: rawImageUrl // Instant Image Link
         }
       };
       
@@ -324,10 +329,11 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
       console.log("Successfully Auto-Published to Pinterest!");
     }
   } catch (pinErr) {
-    console.error("Pinterest API Error:", pinErr.response ? pinErr.response.data : pinErr.message);
+    pinterestStatus = "Failed: " + (pinErr.response ? JSON.stringify(pinErr.response.data) : pinErr.message);
+    console.error("Pinterest API Error:", pinterestStatus);
   }
 
-  return { title: content.title };
+  return { title: content.title, pinterestStatus: pinterestStatus };
 }
 
 module.exports = { publishToGitHub };
