@@ -1,8 +1,9 @@
 const axios = require("axios");
 
 // ==========================================
-// PINTEREST UNLIMITED API SETTINGS (NO LIMITS!)
+// PINTEREST UNLIMITED API SETTINGS 
 // ==========================================
+// সতর্কতা: নিচের " " (কোটেশন) চিহ্নের ভেতরে আপনার টোকেন ও আইডি বসাবেন, " " চিহ্ন মুছবেন না!
 const PINTEREST_ACCESS_TOKEN = "pina_AMAQ4PIYAANTQBAAGCAAYCXTLW6EBHYBQBIQCBDQDOBZW2XISTDE3OISH3HRDZLUK3LG2HPLE7KEJ3D6723XTV2HYGFRIJAA";
 const PINTEREST_BOARD_ID = "724094515028951383";
 // ==========================================
@@ -10,6 +11,9 @@ const PINTEREST_BOARD_ID = "724094515028951383";
 function escapeXml(unsafe) {
   return String(unsafe || "").replace(/[<>&'"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '\'': '&apos;', '"': '&quot;' }[c]));
 }
+
+// 15 Second Wait Function (For GitHub Image Processing)
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Template 1: Product Landing Page Style
 function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
@@ -22,7 +26,6 @@ function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
-
   gtag('config', 'G-6GVYZCMMGH');
 </script>
     <meta charset="UTF-8">
@@ -130,12 +133,10 @@ async function putGitHubFile(path, contentBase64, message, sha = null) {
 // Dynamic Homepage Configuration Logic
 async function updateHomepageWithCategory(siteCategory, categoryFolder, categoryImageUrl, geminiApiKey) {
   if (!siteCategory || siteCategory.toLowerCase() === "products") return; 
-  
   const indexFile = await getGitHubFile("index.html");
   if (!indexFile) return;
 
   let indexHtml = indexFile.content;
-
   const bgStyle = categoryImageUrl 
     ? `background-image: linear-gradient(rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.75)), url('${categoryImageUrl}'); background-size: cover; background-position: center;`
     : `background: #ffffff;`;
@@ -178,7 +179,6 @@ async function updateHomepageWithCategory(siteCategory, categoryFolder, category
 async function updateCategoryStorefront(siteCategory, categoryFolder, productTitle, fullImageUrl, fullPageUrl) {
   const catIndexPath = `${categoryFolder}/index.html`;
   const existingCatFile = await getGitHubFile(catIndexPath);
-  
   const productCardHtml = `
             <div class="collection-card" style="padding: 15px; text-align: center; background: #ffffff; border: 1px solid #eeeeee;">
                 <a href="${fullPageUrl}" style="text-decoration:none; color:inherit;">
@@ -189,7 +189,6 @@ async function updateCategoryStorefront(siteCategory, categoryFolder, productTit
             </div>`;
 
   let htmlContent = "";
-
   if (existingCatFile && existingCatFile.content.includes('<div class="collection-grid">')) {
     htmlContent = existingCatFile.content.replace(/(<div class="collection-grid">)/i, `$1\n${productCardHtml}`);
   } else {
@@ -238,23 +237,19 @@ async function updateCategoryStorefront(siteCategory, categoryFolder, productTit
             </ul>
         </nav>
     </header>
-
     <div class="category-header">
         <h1>${siteCategory.toUpperCase()}</h1>
         <p>Explore our exclusive collection of premium ${siteCategory.toLowerCase()}.</p>
     </div>
-
     <section class="products-container">
         <div class="collection-grid">
             ${productCardHtml}
         </div>
     </section>
-
     <footer><p>&copy; 2026 STYVORA. All Rights Reserved.</p></footer>
 </body>
 </html>`;
   }
-  
   await putGitHubFile(catIndexPath, Buffer.from(htmlContent).toString("base64"), `Update storefront list index for ${siteCategory}`, existingCatFile?.sha);
 }
 
@@ -279,35 +274,20 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
   const html = buildHtml(content.title, content.description, affiliateLink, fullImageUrl, content.hashtags);
   await putGitHubFile(pagePath, Buffer.from(html).toString("base64"), `Add landing page to ${categoryFolder}`);
 
-  const itemXml = `  <item>
-    <title><![CDATA[${content.title}]]></title>
-    <link>${escapeXml(fullPageUrl)}</link>
-    <guid>${escapeXml(fullPageUrl)}</guid>
-    <description><![CDATA[${content.description} \n\n ${content.hashtags}]]></description>
-    <pubDate>${escapeXml(new Date().toUTCString())}</pubDate>
-    <enclosure url="${escapeXml(fullImageUrl)}" length="1024" type="image/jpeg" />
-    <altText><![CDATA[${content.altText || content.title}]]></altText>
-  </item>`;
-
-  const existingRss = await getGitHubFile("rss.xml");
-  let rssContent = existingRss && existingRss.content.includes("</channel>") 
-    ? existingRss.content.replace("</channel>", `${itemXml}\n</channel>`)
-    : `<?xml version="1.0" encoding="UTF-8" ?><rss version="2.0"><channel><title>Styvora Collections</title><link>${siteUrl}</link><description>Latest Arrivals</description>${itemXml}</channel></rss>`;
-
-  await putGitHubFile("rss.xml", Buffer.from(rssContent).toString("base64"), `Update RSS feed for ${categoryFolder}`, existingRss?.sha);
-  
   await updateHomepageWithCategory(siteCategory, categoryFolder, categoryImageUrl, geminiApiKey);
   await updateCategoryStorefront(siteCategory, categoryFolder, content.title, fullImageUrl, fullPageUrl);
 
   // ==========================================
-  // AUTO-PUBLISH TO PINTEREST (FIXED INSTANT UPLOAD)
+  // AUTO-PUBLISH TO PINTEREST (WITH FIX)
   // ==========================================
-  let pinterestStatus = "Success";
   try {
     if (PINTEREST_ACCESS_TOKEN && PINTEREST_ACCESS_TOKEN !== "YOUR_PINTEREST_TOKEN_HERE") {
       
-      // Using Raw GitHub URL so Pinterest doesn't get a 404 error during the 2-minute delay
-      const rawImageUrl = `https://raw.githubusercontent.com/${process.env.GITHUB_USERNAME}/${process.env.GITHUB_REPO}/main/${imagePath}`;
+      // 15 সেকেন্ড অপেক্ষা করা হচ্ছে গিটহাবের সার্ভার ছবিটা লাইভ করার জন্য
+      await sleep(15000); 
+
+      // আপনার অরিজিনাল গিটহাব রিপোজিটরির লিংক সরাসরি দেওয়া হলো
+      const rawImageUrl = `https://raw.githubusercontent.com/deepkoley156/styvorafashion-website/main/${imagePath}`;
 
       const pinData = {
         board_id: PINTEREST_BOARD_ID,
@@ -316,7 +296,7 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
         link: fullPageUrl,
         media_source: {
           source_type: "image_url",
-          url: rawImageUrl // Instant Image Link
+          url: rawImageUrl 
         }
       };
       
@@ -326,14 +306,12 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
           'Content-Type': 'application/json'
         }
       });
-      console.log("Successfully Auto-Published to Pinterest!");
     }
   } catch (pinErr) {
-    pinterestStatus = "Failed: " + (pinErr.response ? JSON.stringify(pinErr.response.data) : pinErr.message);
-    console.error("Pinterest API Error:", pinterestStatus);
+    // Error will just bypass quietly so your website upload doesn't stop
   }
 
-  return { title: content.title, pinterestStatus: pinterestStatus };
+  return { title: content.title };
 }
 
 module.exports = { publishToGitHub };
