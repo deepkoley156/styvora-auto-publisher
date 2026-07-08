@@ -1,7 +1,7 @@
 const axios = require("axios");
 
 // ==========================================
-// PINTEREST UNLIMITED API SETTINGS (DIRECT BASE64 + ERROR LOGGING)
+// PINTEREST UNLIMITED API SETTINGS (URL UPLOAD + ERROR TRACKER)
 // ==========================================
 const PINTEREST_ACCESS_TOKEN = "pina_AMAQ4PIYAANTQBAAGCAAYCXTLW6EBHYBQBIQCBDQDOBZW2XISTDE3OISH3HRDZLUK3LG2HPLE7KEJ3D6723XTV2HYGFRIJAA";
 const PINTEREST_BOARD_ID = "724094515028951383";
@@ -10,6 +10,9 @@ const PINTEREST_BOARD_ID = "724094515028951383";
 function escapeXml(unsafe) {
   return String(unsafe || "").replace(/[<>&'"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '\'': '&apos;', '"': '&quot;' }[c]));
 }
+
+// 10 Second Wait Function for GitHub CDN sync
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Template 1: Product Landing Page Style
 function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
@@ -251,7 +254,6 @@ async function updateCategoryStorefront(siteCategory, categoryFolder, productTit
 
 // Main Controller
 async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCategory, categoryImageUrl, geminiApiKey }) {
-  // 1. Download image and convert to Base64
   const imgRes = await axios.get(imageUrl, { responseType: 'arraybuffer' });
   const imageBase64 = Buffer.from(imgRes.data).toString('base64');
   const imageMimeType = imgRes.headers['content-type'] || 'image/jpeg';
@@ -275,20 +277,24 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
   await updateCategoryStorefront(siteCategory, categoryFolder, content.title, fullImageUrl, fullPageUrl);
 
   // ==========================================
-  // AUTO-PUBLISH TO PINTEREST
+  // AUTO-PUBLISH TO PINTEREST (URL UPLOAD)
   // ==========================================
   try {
     if (PINTEREST_ACCESS_TOKEN && PINTEREST_ACCESS_TOKEN !== "YOUR_PINTEREST_TOKEN_HERE") {
       
+      // 10 Second wait to let GitHub Raw link become active
+      await sleep(10000); 
+
+      const rawImageUrl = `https://raw.githubusercontent.com/deepkoley156/styvorafashion-website/main/${imagePath}`;
+
       const pinData = {
         board_id: PINTEREST_BOARD_ID,
         title: content.title.substring(0, 95), 
         description: `${content.description}\n\n${content.hashtags}`,
         link: fullPageUrl,
         media_source: {
-          source_type: "image_base64", 
-          content_type: imageMimeType,
-          data: imageBase64
+          source_type: "image_url", // Changed back to URL
+          url: rawImageUrl
         }
       };
       
@@ -304,15 +310,14 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
     const errorMessage = pinErr.response ? JSON.stringify(pinErr.response.data) : pinErr.message;
     console.error("Pinterest API ERROR:", errorMessage);
     
-    // ERROR SAVING TO GITHUB HACK
+    // ERROR SAVING TO GITHUB
     try {
-      const errorText = `Pinterest Error Log:\nProduct Title: ${content.title}\nError Detail: ${errorMessage}\nTime: ${new Date().toUTCString()}`;
+      // Adding the raw link to the error file so we can check if the image is actually there
+      const errorText = `Pinterest Error Log:\nProduct Title: ${content.title}\nError Detail: ${errorMessage}\nAttempted Image URL: https://raw.githubusercontent.com/deepkoley156/styvorafashion-website/main/${imagePath}\nTime: ${new Date().toUTCString()}`;
       const errorFileBase64 = Buffer.from(errorText).toString('base64');
       const existingErrorFile = await getGitHubFile("pinterest-error.txt");
       await putGitHubFile("pinterest-error.txt", errorFileBase64, `Logged Pinterest Error for ${content.title}`, existingErrorFile?.sha);
-    } catch (gitErr) {
-      // Ignore if file creation fails
-    }
+    } catch (gitErr) {}
   }
 
   return { title: content.title };
