@@ -1,18 +1,8 @@
 const axios = require("axios");
 
-// ==========================================
-// PINTEREST UNLIMITED API SETTINGS (URL UPLOAD + ERROR TRACKER)
-// ==========================================
-const PINTEREST_ACCESS_TOKEN = "pina_AMA5CPIYAANTQBAAGCAAYCREW4EUHHYBQBIQCOHBGZ36P22ISX4S23GEXQC7SYREABYVBXZQDOUJS3YKOOHYNKRJ7BG33TQA";
-const PINTEREST_BOARD_ID = "724094515028951383";
-// ==========================================
-
 function escapeXml(unsafe) {
   return String(unsafe || "").replace(/[<>&'"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '\'': '&apos;', '"': '&quot;' }[c]));
 }
-
-// 10 Second Wait Function for GitHub CDN sync
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // Template 1: Product Landing Page Style
 function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
@@ -83,35 +73,39 @@ function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
 </html>`;
 }
 
-// AI Engine Input Framework
+// AI Engine Input Framework (With Markdown Filter)
 async function generateWithGemini(imageBase64, imageMimeType, focusProduct, geminiApiKey) {
   const prompt = `Act as an Expert SEO Manager and Copywriter for women's fashion in India. I am providing you with a focus product: ${focusProduct}. 
   CRITICAL RULE: If it is jewelry, call it artificial/gold-plated. Never real gold.
-
-  First, perform internal keyword research and identify 5 high-search-volume, low-competition long-tail keywords specifically suitable for the Indian fashion and jewelry market. 
-
-  Then, write the content by seamlessly and naturally integrating those 5 keywords. 
+  First, perform internal keyword research and identify 5 high-search-volume, low-competition long-tail keywords. 
+  Then, write the content seamlessly integrating those 5 keywords. 
   
-  CRITICAL LENGTH & FORMAT CONSTRAINTS (MANDATORY):
-  - Make.com and Pinterest APIs have strict limits. You MUST keep the text short.
-  - The 'description' MUST be punchy and STRICTLY UNDER 350 CHARACTERS.
-  - The 'hashtags' MUST be STRICTLY UNDER 100 CHARACTERS.
-  - ABSOLUTELY NO MARKDOWN FORMATTING. Do NOT use ** or * anywhere in the output. Provide clean, plain text only.
-
-  Please strictly provide the final output in valid JSON format exactly like the structure below:
+  CRITICAL LIMITS:
+  - 'description' MUST be STRICTLY UNDER 350 CHARACTERS.
+  - 'hashtags' MUST be STRICTLY UNDER 100 CHARACTERS.
+  - NO MARKDOWN FORMATTING. Do NOT use ** or *.
+  
+  Format strictly as JSON:
   {
-    "title": "Your SEO optimized catchy title here",
-    "description": "Your SEO optimized short product description here (STRICTLY UNDER 350 CHARACTERS, NO MARKDOWN)",
-    "hashtags": "List of SEO hashtags here (STRICTLY UNDER 100 CHARACTERS)",
-    "altText": "Your SEO optimized image alt text here (STRICTLY UNDER 300 CHARACTERS)"
+    "title": "SEO title",
+    "description": "SEO description",
+    "hashtags": "hashtags",
+    "altText": "alt text"
   }`;
 
   const response = await axios.post(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
     { contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: imageMimeType, data: imageBase64 } }] }] }
   );
+  
   const text = response.data.candidates[0].content.parts[0].text.replace(/`{3}json|`{3}/g, "").trim();
-  return JSON.parse(text);
+  let parsedData = JSON.parse(text);
+
+  // MAGIC FILTER: Removes all markdown stars (*) forcefully
+  if (parsedData.title) parsedData.title = parsedData.title.replace(/\*/g, "");
+  if (parsedData.description) parsedData.description = parsedData.description.replace(/\*/g, "");
+
+  return parsedData;
 }
 
 // GitHub Core Fetchers
@@ -134,12 +128,11 @@ async function updateHomepageWithCategory(siteCategory, categoryFolder, category
   if (!siteCategory || siteCategory.toLowerCase() === "products") return; 
   const indexFile = await getGitHubFile("index.html");
   if (!indexFile) return;
-
   let indexHtml = indexFile.content;
   const bgStyle = categoryImageUrl 
     ? `background-image: linear-gradient(rgba(255, 255, 255, 0.65), rgba(255, 255, 255, 0.75)), url('${categoryImageUrl}'); background-size: cover; background-position: center;`
     : `background: #ffffff;`;
-
+  
   if (indexHtml.includes(`https://styvorafashion.com/${categoryFolder}`)) {
     const stylePattern = new RegExp(`(<div class="collection-card" style=")[^"]*(">[\\s\\S]*?<a href="https://styvorafashion.com/${categoryFolder}")`, "i");
     if (stylePattern.test(indexHtml)) {
@@ -148,17 +141,16 @@ async function updateHomepageWithCategory(siteCategory, categoryFolder, category
     }
     return;
   }
-
+  
   let catDesc = "Discover our exclusive new arrivals tailored for your elegant lifestyle.";
   try {
-    const prompt = `You are a premium fashion copywriter. Write a very short, engaging 1-line description (maximum 10 words) for a women's fashion website category named '${siteCategory}'. Do not use quotes or hashtags.`;
     const response = await axios.post(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
-      { contents: [{ parts: [{ text: prompt }] }] }
+      { contents: [{ parts: [{ text: `You are a premium fashion copywriter. Write a very short, engaging 1-line description (maximum 10 words) for a women's fashion website category named '${siteCategory}'. Do not use quotes or hashtags.` }] }] }
     );
     catDesc = response.data.candidates[0].content.parts[0].text.replace(/["\n]/g, "").trim();
   } catch (e) {}
-
+  
   const newCardHtml = `
             <div class="collection-card" style="${bgStyle} border: 1px solid #eeeeee; padding: 50px 30px; transition: transform 0.3s; text-align: center;">
                 <a href="https://styvorafashion.com/${categoryFolder}" style="display:block; text-decoration:none; color:inherit;">
@@ -167,7 +159,7 @@ async function updateHomepageWithCategory(siteCategory, categoryFolder, category
                     <span style="font-size: 11px; font-weight: bold; border-bottom: 1px solid #111; margin-top: 15px; display: inline-block; color: #111;">EXPLORE &rarr;</span>
                 </a>
             </div>`;
-
+  
   if (indexHtml.includes('<div class="collection-grid">')) {
      indexHtml = indexHtml.replace(/(<div class="collection-grid">)/i, `$1\n${newCardHtml}`);
      await putGitHubFile("index.html", Buffer.from(indexHtml).toString("base64"), `Auto-added category ${siteCategory} to homepage`, indexFile.sha);
@@ -186,68 +178,12 @@ async function updateCategoryStorefront(siteCategory, categoryFolder, productTit
                     <span style="font-size: 12px; font-weight: bold; border-bottom: 1px solid #111;">VIEW PRODUCT &rarr;</span>
                 </a>
             </div>`;
-
+            
   let htmlContent = "";
   if (existingCatFile && existingCatFile.content.includes('<div class="collection-grid">')) {
     htmlContent = existingCatFile.content.replace(/(<div class="collection-grid">)/i, `$1\n${productCardHtml}`);
   } else {
-    htmlContent = `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${siteCategory.toUpperCase()} | Styvora Fashion</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #fbfbfb; color: #1a1a1a; line-height: 1.6; }
-        a { text-decoration: none; color: inherit; transition: all 0.3s ease; }
-        header { display: flex; justify-content: space-between; align-items: center; padding: 15px 8%; background-color: #ffffff; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02); position: sticky; top: 0; z-index: 1000; }
-        .logo-container { display: flex; align-items: center; gap: 12px; }
-        .brand-logo { height: 45px; width: 45px; object-fit: cover; border-radius: 50%; }
-        .brand-name { font-size: 24px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: #111111; }
-        nav ul { list-style: none; display: flex; gap: 35px; }
-        nav ul li a { font-size: 13px; font-weight: 500; text-transform: uppercase; letter-spacing: 1.5px; color: #555555; }
-        nav ul li a:hover { color: #000000; }
-        .category-header { text-align: center; padding: 60px 20px; background: #ffffff; border-bottom: 1px solid #eeeeee; }
-        .category-header h1 { font-size: 32px; font-weight: 400; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 15px; }
-        .category-header p { font-size: 16px; color: #666666; max-width: 600px; margin: auto; }
-        .products-container { padding: 60px 8%; }
-        .collection-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 30px; max-width: 1200px; margin: 0 auto; }
-        .collection-card { transition: transform 0.3s; }
-        .collection-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
-        footer { background-color: #111111; color: #ffffff; text-align: center; padding: 50px 20px; margin-top: 60px;}
-        footer p { font-size: 13px; letter-spacing: 1.5px; color: #999999; }
-        @media (max-width: 768px) {
-            header { flex-direction: column; gap: 20px; padding: 20px; }
-            nav ul { gap: 15px; flex-wrap: wrap; justify-content: center; }
-        }
-    </style>
-</head>
-<body>
-    <header>
-        <a href="https://styvorafashion.com" class="logo-container">
-            <img src="https://styvorafashion.com/logo.jpg" alt="Styvora Logo" class="brand-logo">
-            <span class="brand-name">Styvora</span>
-        </a>
-        <nav>
-            <ul>
-                <li><a href="https://styvorafashion.com/">Home</a></li>
-                <li><a href="https://styvorafashion.com/contact">Contact</a></li>
-            </ul>
-        </nav>
-    </header>
-    <div class="category-header">
-        <h1>${siteCategory.toUpperCase()}</h1>
-        <p>Explore our exclusive collection of premium ${siteCategory.toLowerCase()}.</p>
-    </div>
-    <section class="products-container">
-        <div class="collection-grid">
-            ${productCardHtml}
-        </div>
-    </section>
-    <footer><p>&copy; 2026 STYVORA. All Rights Reserved.</p></footer>
-</body>
-</html>`;
+    htmlContent = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${siteCategory.toUpperCase()} | Styvora Fashion</title><style>* { margin: 0; padding: 0; box-sizing: border-box; } body { font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #fbfbfb; color: #1a1a1a; line-height: 1.6; } a { text-decoration: none; color: inherit; transition: all 0.3s ease; } header { display: flex; justify-content: space-between; align-items: center; padding: 15px 8%; background-color: #ffffff; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02); position: sticky; top: 0; z-index: 1000; } .logo-container { display: flex; align-items: center; gap: 12px; } .brand-logo { height: 45px; width: 45px; object-fit: cover; border-radius: 50%; } .brand-name { font-size: 24px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: #111111; } nav ul { list-style: none; display: flex; gap: 35px; } nav ul li a { font-size: 13px; font-weight: 500; text-transform: uppercase; letter-spacing: 1.5px; color: #555555; } nav ul li a:hover { color: #000000; } .category-header { text-align: center; padding: 60px 20px; background: #ffffff; border-bottom: 1px solid #eeeeee; } .category-header h1 { font-size: 32px; font-weight: 400; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 15px; } .category-header p { font-size: 16px; color: #666666; max-width: 600px; margin: auto; } .products-container { padding: 60px 8%; } .collection-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 30px; max-width: 1200px; margin: 0 auto; } .collection-card { transition: transform 0.3s; } .collection-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.05); } footer { background-color: #111111; color: #ffffff; text-align: center; padding: 50px 20px; margin-top: 60px;} footer p { font-size: 13px; letter-spacing: 1.5px; color: #999999; } @media (max-width: 768px) { header { flex-direction: column; gap: 20px; padding: 20px; } nav ul { gap: 15px; flex-wrap: wrap; justify-content: center; } }</style></head><body><header><a href="https://styvorafashion.com" class="logo-container"><img src="https://styvorafashion.com/logo.jpg" alt="Styvora Logo" class="brand-logo"><span class="brand-name">Styvora</span></a><nav><ul><li><a href="https://styvorafashion.com/">Home</a></li><li><a href="https://styvorafashion.com/contact">Contact</a></li></ul></nav></header><div class="category-header"><h1>${siteCategory.toUpperCase()}</h1><p>Explore our exclusive collection of premium ${siteCategory.toLowerCase()}.</p></div><section class="products-container"><div class="collection-grid">${productCardHtml}</div></section><footer><p>&copy; 2026 STYVORA. All Rights Reserved.</p></footer></body></html>`;
   }
   await putGitHubFile(catIndexPath, Buffer.from(htmlContent).toString("base64"), `Update storefront list index for ${siteCategory}`, existingCatFile?.sha);
 }
@@ -269,56 +205,32 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
   const fullImageUrl = `${siteUrl}/${imagePath}`;
   const fullPageUrl = `${siteUrl}/${pagePath}`;
 
+  // Upload Image and HTML page to GitHub
   await putGitHubFile(imagePath, imageBase64, `Add image to ${categoryFolder}`);
   const html = buildHtml(content.title, content.description, affiliateLink, fullImageUrl, content.hashtags);
   await putGitHubFile(pagePath, Buffer.from(html).toString("base64"), `Add landing page to ${categoryFolder}`);
 
+  // Create RSS Entry for Pinterest Auto-publish Feature
+  const itemXml = `  <item>
+    <title><![CDATA[${content.title}]]></title>
+    <link>${escapeXml(fullPageUrl)}</link>
+    <guid>${escapeXml(fullPageUrl)}</guid>
+    <description><![CDATA[${content.description} \n\n ${content.hashtags}]]></description>
+    <pubDate>${escapeXml(new Date().toUTCString())}</pubDate>
+    <enclosure url="${escapeXml(fullImageUrl)}" length="1024" type="${escapeXml(imageMimeType)}" />
+    <altText><![CDATA[${content.altText || content.title}]]></altText>
+  </item>`;
+
+  const existingRss = await getGitHubFile("rss.xml");
+  let rssContent = existingRss && existingRss.content.includes("</channel>") 
+    ? existingRss.content.replace("</channel>", `${itemXml}\n</channel>`)
+    : `<?xml version="1.0" encoding="UTF-8" ?><rss version="2.0"><channel><title>Styvora Collections</title><link>${siteUrl}</link><description>Latest Arrivals</description>${itemXml}</channel></rss>`;
+
+  await putGitHubFile("rss.xml", Buffer.from(rssContent).toString("base64"), `Update RSS feed for ${categoryFolder}`, existingRss?.sha);
+  
+  // Update Website Stores
   await updateHomepageWithCategory(siteCategory, categoryFolder, categoryImageUrl, geminiApiKey);
   await updateCategoryStorefront(siteCategory, categoryFolder, content.title, fullImageUrl, fullPageUrl);
-
-  // ==========================================
-  // AUTO-PUBLISH TO PINTEREST (URL UPLOAD)
-  // ==========================================
-  try {
-    if (PINTEREST_ACCESS_TOKEN && PINTEREST_ACCESS_TOKEN !== "YOUR_PINTEREST_TOKEN_HERE") {
-      
-      // 10 Second wait to let GitHub Raw link become active
-      await sleep(10000); 
-
-      const rawImageUrl = `https://raw.githubusercontent.com/deepkoley156/styvorafashion-website/main/${imagePath}`;
-
-      const pinData = {
-        board_id: PINTEREST_BOARD_ID,
-        title: content.title.substring(0, 95), 
-        description: `${content.description}\n\n${content.hashtags}`,
-        link: fullPageUrl,
-        media_source: {
-          source_type: "image_url", // Changed back to URL
-          url: rawImageUrl
-        }
-      };
-      
-      await axios.post('https://api.pinterest.com/v5/pins', pinData, {
-        headers: {
-          'Authorization': `Bearer ${PINTEREST_ACCESS_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      console.log("Successfully Auto-Published to Pinterest!");
-    }
-  } catch (pinErr) {
-    const errorMessage = pinErr.response ? JSON.stringify(pinErr.response.data) : pinErr.message;
-    console.error("Pinterest API ERROR:", errorMessage);
-    
-    // ERROR SAVING TO GITHUB
-    try {
-      // Adding the raw link to the error file so we can check if the image is actually there
-      const errorText = `Pinterest Error Log:\nProduct Title: ${content.title}\nError Detail: ${errorMessage}\nAttempted Image URL: https://raw.githubusercontent.com/deepkoley156/styvorafashion-website/main/${imagePath}\nTime: ${new Date().toUTCString()}`;
-      const errorFileBase64 = Buffer.from(errorText).toString('base64');
-      const existingErrorFile = await getGitHubFile("pinterest-error.txt");
-      await putGitHubFile("pinterest-error.txt", errorFileBase64, `Logged Pinterest Error for ${content.title}`, existingErrorFile?.sha);
-    } catch (gitErr) {}
-  }
 
   return { title: content.title };
 }
