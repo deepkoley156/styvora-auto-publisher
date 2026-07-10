@@ -4,7 +4,6 @@ function escapeXml(unsafe) {
   return String(unsafe || "").replace(/[<>&'"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '\'': '&apos;', '"': '&quot;' }[c]));
 }
 
-// Function to safely format fields for Pinterest Bulk CSV
 function escapeCsv(field) {
   let stringValue = String(field || "").replace(/"/g, '""');
   if (stringValue.includes(",") || stringValue.includes('"') || stringValue.includes("\n") || stringValue.includes("\r")) {
@@ -176,15 +175,9 @@ async function updateCategoryStorefront(siteCategory, categoryFolder, productTit
   await putGitHubFile(catIndexPath, Buffer.from(htmlContent).toString("base64"), `Update storefront list index for ${siteCategory}`, existingCatFile?.sha);
 }
 
-// Main Controller with Bypass Bundling Extract
+// Main Controller
 async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCategory, categoryImageUrl, geminiApiKey }) {
-  const imgRes = await axios.get(imageUrl, { responseType: 'arraybuffer' });
-  const imageBase64 = Buffer.from(imgRes.data).toString('base64');
-  const imageMimeType = imgRes.headers['content-type'] || 'image/jpeg';
-
-  const content = await generateWithGemini(imageBase64, imageMimeType, focusProduct, geminiApiKey);
-  
-  // ⚡ UNPACK BUNDLED ROUTING DATA
+  // ⚡ 1. UNPACK BUNDLED ROUTING DATA
   let mode = "rss";
   let boardName = "Women's Fashion";
   let actualSiteCategory = siteCategory || "products";
@@ -196,6 +189,21 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
     boardName = parts[2] || "Women's Fashion";
   }
 
+  // ⚡ 2. INTERCEPT RESET CSV COMMAND (NO API LIMITS WASTED)
+  if (mode === "reset_csv") {
+    const csvHeader = "Title,Media URL,Pinterest board,Thumbnail,Description,Link,Publish date,Keywords\n";
+    const existingCsv = await getGitHubFile("pinterest_bulk.csv");
+    await putGitHubFile("pinterest_bulk.csv", Buffer.from(csvHeader).toString("base64"), `Reset Pinterest Bulk CSV Data`, existingCsv?.sha);
+    return { title: "CSV Reset Successfully" };
+  }
+
+  // ⚡ 3. NORMAL PROCESSING (FOR RSS & CSV UPLOADS)
+  const imgRes = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+  const imageBase64 = Buffer.from(imgRes.data).toString('base64');
+  const imageMimeType = imgRes.headers['content-type'] || 'image/jpeg';
+
+  const content = await generateWithGemini(imageBase64, imageMimeType, focusProduct, geminiApiKey);
+  
   const slug = content.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   const categoryFolder = actualSiteCategory.toLowerCase().replace(/[^a-z0-9]+/g, "");
   
@@ -210,7 +218,6 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
   await putGitHubFile(pagePath, Buffer.from(html).toString("base64"), `Add landing page to ${categoryFolder}`);
 
   if (mode === "rss") {
-    // 1. RSS FEED MODE
     const itemXml = `  <item>
     <title><![CDATA[${content.title}]]></title>
     <link>${escapeXml(fullPageUrl)}</link>
@@ -228,7 +235,6 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
 
     await putGitHubFile("rss.xml", Buffer.from(rssContent).toString("base64"), `Update RSS feed for ${categoryFolder}`, existingRss?.sha);
   } else if (mode === "csv") {
-    // 2. OFFICIAL PINTEREST BULK CSV MODE
     const cleanDesc = `${content.description} \n\n ${content.hashtags}`;
     const newCsvRow = `${escapeCsv(content.title)},${escapeCsv(fullImageUrl)},${escapeCsv(boardName)},,${escapeCsv(cleanDesc)},${escapeCsv(fullPageUrl)},,${escapeCsv(actualSiteCategory)}\n`;
 
