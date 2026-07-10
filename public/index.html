@@ -22,8 +22,13 @@
     .mode-container { background: #fff; border: 1px solid #eee; padding: 15px; border-radius: 8px; margin-top: 20px; border-left: 4px solid #111; }
     .mode-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
     .mode-header h3 { margin: 0; font-size: 15px; color: #111; text-transform: uppercase; }
+    
+    /* New Button Group Styling */
+    .btn-group { display: flex; gap: 8px; align-items: center; }
     .download-btn { display: none; font-size: 12px; color: #007bff; text-decoration: none; font-weight: bold; background: #e6f2ff; padding: 6px 12px; border-radius: 4px; transition: background 0.3s; }
     .download-btn:hover { background: #cce5ff; }
+    .reset-btn { display: none; cursor: pointer; font-size: 12px; color: #dc3545; font-weight: bold; background: #f8d7da; padding: 6px 12px; border-radius: 4px; border: none; transition: background 0.3s; }
+    .reset-btn:hover { background: #f5c6cb; }
     
     .switch-box { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
     .switch-box span.lbl { font-size: 14px; color: #555; font-weight: 500; }
@@ -82,7 +87,10 @@
       <div class="mode-container">
         <div class="mode-header">
             <h3>Publishing Mode</h3>
-            <a href="https://github.com/deepkoley156/styvorafashion-website/blob/main/pinterest_bulk.csv" target="_blank" class="download-btn" id="downloadBox">📥 View/Download CSV</a>
+            <div class="btn-group">
+                <button id="resetCsvBtn" class="reset-btn" onclick="resetCsvData()">🗑️ Reset CSV</button>
+                <a href="https://github.com/deepkoley156/styvorafashion-website/blob/main/pinterest_bulk.csv" target="_blank" class="download-btn" id="downloadBox">📥 View CSV</a>
+            </div>
         </div>
         
         <div class="switch-box">
@@ -133,6 +141,7 @@
     const boardInput = document.getElementById('boardInput');
     const boardContainer = document.getElementById('boardInputContainer');
     const downloadBox = document.getElementById('downloadBox');
+    const resetCsvBtn = document.getElementById('resetCsvBtn');
 
     function updateToggleUI(isChecked) {
         if (isChecked) {
@@ -141,6 +150,7 @@
             boardInput.style.color = "#111";
             boardContainer.style.opacity = "1";
             downloadBox.style.display = "inline-block";
+            resetCsvBtn.style.display = "inline-block"; // Show Reset Button
             selectedPublishMode = "csv";
         } else {
             boardInput.disabled = true;
@@ -148,6 +158,7 @@
             boardInput.style.color = "#999";
             boardContainer.style.opacity = "0.5";
             downloadBox.style.display = "none";
+            resetCsvBtn.style.display = "none"; // Hide Reset Button
             selectedPublishMode = "rss";
         }
     }
@@ -192,6 +203,40 @@
       const status = document.getElementById("saveStatus");
       status.style.display = "block";
       setTimeout(() => status.style.display = "none", 2000);
+    }
+
+    // ⚡ NEW RESET FUNCTION
+    async function resetCsvData() {
+        if (!confirm("Are you sure you want to clear all previous data from the CSV file? This cannot be undone.")) return;
+
+        const originalText = resetCsvBtn.innerHTML;
+        resetCsvBtn.innerHTML = "⏳ Clearing...";
+        resetCsvBtn.disabled = true;
+
+        const apiKey = document.getElementById("geminiKey").value || localStorage.getItem("geminiApiKey");
+
+        try {
+            const res = await fetch("/api/publish-single", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    productUrl: "dummy", affiliateLink: "dummy", imageUrl: "dummy",
+                    focusProduct: "dummy", siteCategory: "dummy|||reset_csv|||dummy", categoryImageUrl: "",
+                    geminiApiKey: apiKey, telegramBypass: false
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert("✅ CSV File has been cleared successfully! You can start fresh now.");
+            } else {
+                alert("❌ Failed to reset: " + data.error);
+            }
+        } catch(e) {
+            alert("❌ Network Error: " + e.message);
+        }
+        
+        resetCsvBtn.innerHTML = originalText;
+        resetCsvBtn.disabled = false;
     }
 
     function logToConsole(text, isError = false) {
