@@ -82,7 +82,7 @@
       <div class="mode-container">
         <div class="mode-header">
             <h3>Publishing Mode</h3>
-            <a href="https://raw.githubusercontent.com/deepkoley156/styvorafashion-website/main/pinterest_bulk.csv" target="_blank" download class="download-btn" id="downloadBox">📥 Download CSV</a>
+            <a href="https://github.com/deepkoley156/styvorafashion-website/blob/main/pinterest_bulk.csv" target="_blank" class="download-btn" id="downloadBox">📥 View/Download CSV</a>
         </div>
         
         <div class="switch-box">
@@ -283,7 +283,6 @@
         status.textContent = `Processing product ${rowNum} of ${globalProductsList.length}...`;
         logToConsole(`Processing Row ${rowNum}...`);
 
-        // 🚀 MASTER ENCODE BYPASS HOOK
         const bundledCategory = siteCategory + "|||" + selectedPublishMode + "|||" + boardName;
 
         try {
@@ -295,7 +294,7 @@
               affiliateLink: product.affiliateLink,
               imageUrl: product.image,
               focusProduct: productType,
-              siteCategory: bundledCategory, // Sent via bundled wrapper
+              siteCategory: bundledCategory,
               categoryImageUrl: categoryImage,
               geminiApiKey: apiKey,
               telegramBypass: isBypass
