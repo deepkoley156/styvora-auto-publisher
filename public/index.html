@@ -23,7 +23,6 @@
     .mode-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
     .mode-header h3 { margin: 0; font-size: 15px; color: #111; text-transform: uppercase; }
     
-    /* New Button Group Styling */
     .btn-group { display: flex; gap: 8px; align-items: center; }
     .download-btn { display: none; font-size: 12px; color: #007bff; text-decoration: none; font-weight: bold; background: #e6f2ff; padding: 6px 12px; border-radius: 4px; transition: background 0.3s; }
     .download-btn:hover { background: #cce5ff; }
@@ -150,7 +149,7 @@
             boardInput.style.color = "#111";
             boardContainer.style.opacity = "1";
             downloadBox.style.display = "inline-block";
-            resetCsvBtn.style.display = "inline-block"; // Show Reset Button
+            resetCsvBtn.style.display = "inline-block"; 
             selectedPublishMode = "csv";
         } else {
             boardInput.disabled = true;
@@ -158,7 +157,7 @@
             boardInput.style.color = "#999";
             boardContainer.style.opacity = "0.5";
             downloadBox.style.display = "none";
-            resetCsvBtn.style.display = "none"; // Hide Reset Button
+            resetCsvBtn.style.display = "none"; 
             selectedPublishMode = "rss";
         }
     }
@@ -205,7 +204,7 @@
       setTimeout(() => status.style.display = "none", 2000);
     }
 
-    // ⚡ NEW RESET FUNCTION
+    // ⚡ FIXED RESET FUNCTION
     async function resetCsvData() {
         if (!confirm("Are you sure you want to clear all previous data from the CSV file? This cannot be undone.")) return;
 
@@ -220,9 +219,14 @@
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    productUrl: "dummy", affiliateLink: "dummy", imageUrl: "dummy",
-                    focusProduct: "dummy", siteCategory: "dummy|||reset_csv|||dummy", categoryImageUrl: "",
-                    geminiApiKey: apiKey, telegramBypass: false
+                    productUrl: "https://styvorafashion.com", 
+                    affiliateLink: "https://styvorafashion.com", 
+                    imageUrl: "https://styvorafashion.com/logo.jpg", // Valid URL inserted
+                    focusProduct: "Reset CSV", 
+                    siteCategory: "products|||reset_csv|||Women's Fashion", 
+                    categoryImageUrl: "",
+                    geminiApiKey: apiKey, 
+                    telegramBypass: true // STOPS TELEGRAM BOT
                 })
             });
             const data = await res.json();
