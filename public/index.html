@@ -6,76 +6,119 @@
   <title>Styvora Bulk Auto-Publisher</title>
   <style>
     body { font-family: Arial, sans-serif; background: #f7f7f7; padding: 20px; color: #111; }
-    .container { max-width: 600px; background: #fff; padding: 30px; border-radius: 12px; margin: auto; border: 1px solid #e8e8e8; }
+    .container { max-width: 600px; background: #fff; padding: 30px; border-radius: 12px; margin: auto; border: 1px solid #e8e8e8; box-shadow: 0 4px 15px rgba(0,0,0,0.03); }
     
     .header-wrap { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
     h2 { margin: 0; font-size: 22px; }
-    .settings-btn { font-size: 26px; cursor: pointer; background: none; border: none; padding: 0; }
+    .settings-btn { font-size: 26px; cursor: pointer; background: none; border: none; padding: 0; transition: transform 0.3s; }
+    .settings-btn:hover { transform: rotate(45deg); }
     
-    .settings-box { display: none; background: #fafafa; border: 1px solid #ddd; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+    .settings-box { display: none; background: #fafafa; border: 1px solid #ddd; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
     
-    label { font-weight: bold; font-size: 14px; display: block; margin-top: 15px; margin-bottom: 5px; }
-    input[type="text"], input[type="url"], input[type="password"], input[type="file"], input[type="number"] { width: 100%; padding: 12px; box-sizing: border-box; border-radius: 8px; border: 1px solid #ddd; font-size: 15px; background: #fff; }
+    label { font-weight: bold; font-size: 14px; display: block; margin-top: 15px; margin-bottom: 5px; color: #333; }
+    input[type="text"], input[type="url"], input[type="password"], input[type="file"], input[type="number"] { width: 100%; padding: 12px; box-sizing: border-box; border-radius: 8px; border: 1px solid #ddd; font-size: 15px; background: #fff; transition: border-color 0.3s; }
+    input:focus { border-color: #111; outline: none; }
+    
+    /* Publisher Mode Settings Area */
+    .mode-container { background: #fff; border: 1px solid #eee; padding: 15px; border-radius: 8px; margin-top: 20px; border-left: 4px solid #111; }
+    .mode-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+    .mode-header h3 { margin: 0; font-size: 15px; color: #111; text-transform: uppercase; }
+    .download-btn { display: none; font-size: 12px; color: #007bff; text-decoration: none; font-weight: bold; background: #e6f2ff; padding: 6px 12px; border-radius: 4px; transition: background 0.3s; }
+    .download-btn:hover { background: #cce5ff; }
+    
+    .switch-box { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
+    .switch-box span.lbl { font-size: 14px; color: #555; font-weight: 500; }
+    .toggle-wrapper { display: flex; align-items: center; gap: 10px; }
+    .toggle-wrapper span { font-size: 13px; font-weight: bold; color: #777; }
+    
+    /* Toggle Switch CSS */
+    .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 24px; }
+    .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; }
+    input:checked + .slider { background-color: #111; }
+    input:checked + .slider:before { transform: translateX(20px); }
     
     .toggle-label { display: flex; align-items: center; cursor: pointer; margin-top: 15px; color: #d9534f; font-weight: bold;}
     .toggle-label input { width: auto; margin-right: 10px; transform: scale(1.3); }
 
-    button { cursor: pointer; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; padding: 15px; width: 100%; }
+    button.action { cursor: pointer; border: none; border-radius: 8px; font-weight: bold; font-size: 16px; padding: 15px; width: 100%; transition: background 0.3s; }
     .main-btn { margin-top: 20px; background: #111; color: #fff; }
-    .save-btn { margin-top: 15px; padding: 10px; background: #333; color: #fff; border-radius: 6px; }
+    .main-btn:hover { background: #333; }
+    .save-btn { margin-top: 20px; padding: 12px; background: #333; color: #fff; border-radius: 6px; width: 100%; cursor: pointer; font-weight: bold; border: none; }
     
     .action-buttons { display: flex; gap: 10px; margin-top: 15px; }
-    .stop-btn { background: #d9534f; color: #fff; display: none; }
-    .restart-btn { background: #f0ad4e; color: #111; display: none; }
+    .stop-btn { background: #d9534f; color: #fff; display: none; padding: 15px; border-radius: 8px; font-weight: bold; width: 50%; border: none; cursor: pointer;}
+    .restart-btn { background: #f0ad4e; color: #111; display: none; padding: 15px; border-radius: 8px; font-weight: bold; width: 50%; border: none; cursor: pointer;}
     
-    .console-log { background: #222; color: #00ff00; font-family: monospace; padding: 15px; border-radius: 8px; margin-top: 20px; max-height: 250px; overflow-y: auto; font-size: 13px; display: none; }
-    .note { font-size: 13px; color: #666; margin-top: 4px; }
-    #status { margin-top: 15px; font-weight: bold; color: #333; }
+    .console-log { background: #1e1e1e; color: #00ff00; font-family: 'Courier New', monospace; padding: 15px; border-radius: 8px; margin-top: 20px; max-height: 250px; overflow-y: auto; font-size: 13px; display: none; border: 1px solid #000; }
+    .note { font-size: 12px; color: #777; margin-top: 4px; font-style: italic; }
+    #status { margin-top: 15px; font-weight: bold; color: #333; text-align: center; }
   </style>
 </head>
 <body>
   <div class="container">
     <div class="header-wrap">
       <h2>Styvora Bulk Publisher</h2>
-      <button class="settings-btn" onclick="toggleSettings()">⚙️</button>
+      <button class="settings-btn" onclick="toggleSettings()" title="Settings">⚙️</button>
     </div>
     
-    <!-- Settings Box -->
     <div id="settingsBox" class="settings-box">
       <label for="geminiKey">Gemini API Key</label>
       <input type="password" id="geminiKey" placeholder="Enter Gemini API Key">
       
-      <label for="productType">AI Prompt Focus (e.g. Traditional Saree)</label>
+      <label for="productType">AI Prompt Focus</label>
       <input type="text" id="productType" placeholder="e.g. Saree, Kurti">
       
       <label for="siteCategory" style="color: #0066cc;">Website Category (Folder Name)</label>
       <input type="text" id="siteCategory" placeholder="e.g. sarees, jewelry, kurtis">
-      <div class="note">Aii folder-er vitore apnar landing page toiri hobe.</div>
+      <div class="note">This folder will contain your landing pages.</div>
 
       <label for="categoryImage" style="color: #0066cc;">Category Background Image URL (Optional)</label>
       <input type="url" id="categoryImage" placeholder="https://... (Image link for homepage card)">
-      <div class="note">Homepage card-er pechone transparent minimalist image toiri korar jonno.</div>
       
       <label class="toggle-label">
         <input type="checkbox" id="telegramBypass"> Telegram Bypass (Direct Affiliate Link)
       </label>
 
+      <div class="mode-container">
+        <div class="mode-header">
+            <h3>Publishing Mode</h3>
+            <a href="https://styvorafashion.com/pinterest_bulk.csv" target="_blank" download class="download-btn" id="downloadBox">📥 Download CSV</a>
+        </div>
+        
+        <div class="switch-box">
+            <span class="lbl">Output Format:</span>
+            <div class="toggle-wrapper">
+                <span>RSS</span>
+                <label class="switch">
+                    <input type="checkbox" id="modeToggle">
+                    <span class="slider"></span>
+                </label>
+                <span>CSV</span>
+            </div>
+        </div>
+
+        <div id="boardInputContainer" style="opacity: 0.5;">
+            <label style="margin-top: 0; font-size: 13px;">Pinterest Board Name:</label>
+            <input type="text" id="boardInput" value="Indian Jhumka Earrings | Traditional" placeholder="Enter board name" disabled style="background: #f0f0f0; color: #999;">
+        </div>
+      </div>
+
       <button class="save-btn" onclick="saveSettings()">Save Settings</button>
-      <div id="saveStatus" style="color: green; font-size: 12px; margin-top: 5px; display: none;">Settings Saved!</div>
+      <div id="saveStatus" style="color: green; font-size: 12px; margin-top: 8px; display: none; text-align: center; font-weight: bold;">Settings Saved Successfully!</div>
     </div>
     
-    <!-- Main Form -->
     <label for="excelFile">Upload Products Sheet (.xlsx / .csv)</label>
     <input type="file" id="excelFile" accept=".xlsx, .xls, .csv">
     
     <label for="skipRows" style="color: #0066cc; margin-top: 20px;">Skip Rows / Already Processed (Optional)</label>
     <input type="number" id="skipRows" min="0" placeholder="e.g. 16">
     
-    <!-- Action Controls -->
-    <button class="main-btn" onclick="startBulkProcess()" id="submitBtn">Start Bulk Processing</button>
+    <button class="action main-btn" onclick="startBulkProcess()" id="submitBtn">Start Bulk Processing</button>
     <div class="action-buttons">
       <button class="stop-btn" onclick="forceStop()" id="stopBtn">🛑 Force Stop</button>
-      <button class="restart-btn" onclick="resumeProcessing()" id="restartBtn">🔄 Restart from Row <span id="restartRowTarget"></span></button>
+      <button class="restart-btn" onclick="resumeProcessing()" id="restartBtn">🔄 Restart from <span id="restartRowTarget"></span></button>
     </div>
     
     <div id="status"></div>
@@ -86,6 +129,35 @@
     let globalProductsList = [];
     let currentProcessingIndex = 0;
     let isProcessingActive = false;
+    let selectedPublishMode = "rss";
+
+    // UI Interactive Logic for Mode Toggle
+    const modeToggle = document.getElementById('modeToggle');
+    const boardInput = document.getElementById('boardInput');
+    const boardContainer = document.getElementById('boardInputContainer');
+    const downloadBox = document.getElementById('downloadBox');
+
+    function updateToggleUI(isChecked) {
+        if (isChecked) {
+            boardInput.disabled = false;
+            boardInput.style.background = "#fff";
+            boardInput.style.color = "#111";
+            boardContainer.style.opacity = "1";
+            downloadBox.style.display = "inline-block";
+            selectedPublishMode = "csv";
+        } else {
+            boardInput.disabled = true;
+            boardInput.style.background = "#f0f0f0";
+            boardInput.style.color = "#999";
+            boardContainer.style.opacity = "0.5";
+            downloadBox.style.display = "none";
+            selectedPublishMode = "rss";
+        }
+    }
+
+    modeToggle.addEventListener('change', function() {
+        updateToggleUI(this.checked);
+    });
 
     document.addEventListener("DOMContentLoaded", () => {
       if (localStorage.getItem("geminiApiKey")) document.getElementById("geminiKey").value = localStorage.getItem("geminiApiKey");
@@ -93,6 +165,16 @@
       if (localStorage.getItem("siteCategory")) document.getElementById("siteCategory").value = localStorage.getItem("siteCategory");
       if (localStorage.getItem("categoryImage")) document.getElementById("categoryImage").value = localStorage.getItem("categoryImage");
       document.getElementById("telegramBypass").checked = localStorage.getItem("telegramBypass") === "true";
+      
+      // Load saved mode
+      const savedMode = localStorage.getItem("publishMode");
+      if (savedMode === "csv") {
+          modeToggle.checked = true;
+          updateToggleUI(true);
+      }
+      if (localStorage.getItem("pinterestBoard")) {
+          boardInput.value = localStorage.getItem("pinterestBoard");
+      }
     });
 
     function toggleSettings() {
@@ -106,6 +188,8 @@
       localStorage.setItem("siteCategory", document.getElementById("siteCategory").value.trim());
       localStorage.setItem("categoryImage", document.getElementById("categoryImage").value.trim());
       localStorage.setItem("telegramBypass", document.getElementById("telegramBypass").checked);
+      localStorage.setItem("publishMode", modeToggle.checked ? "csv" : "rss");
+      localStorage.setItem("pinterestBoard", boardInput.value.trim());
       
       const status = document.getElementById("saveStatus");
       status.style.display = "block";
@@ -149,8 +233,11 @@
       const status = document.getElementById("status");
       const apiKey = localStorage.getItem("geminiApiKey");
       
-      if (!apiKey) { alert("Please save your Gemini API Key first!"); return; }
+      if (!apiKey) { alert("Please save your Gemini API Key in settings first!"); return; }
       if (fileInput.files.length === 0) { alert("Please upload an Excel or CSV file!"); return; }
+
+      // Update current mode before starting
+      selectedPublishMode = modeToggle.checked ? "csv" : "rss";
 
       status.textContent = "Parsing File...";
       status.style.color = "#333";
@@ -169,7 +256,7 @@
         currentProcessingIndex = parseInt(skipInput.value) || 0;
         
         if (currentProcessingIndex > 0) logToConsole(`Skipping the first ${currentProcessingIndex} products...`);
-        logToConsole(`Total rows in sheet: ${globalProductsList.length}. Starting loop...`);
+        logToConsole(`Total rows in sheet: ${globalProductsList.length}. Mode: ${selectedPublishMode.toUpperCase()}. Starting...`);
         
         resumeProcessing();
       } catch (err) {
@@ -186,6 +273,7 @@
       const siteCategory = localStorage.getItem("siteCategory") || "products";
       const categoryImage = localStorage.getItem("categoryImage") || "";
       const isBypass = localStorage.getItem("telegramBypass") === "true";
+      const boardName = document.getElementById("boardInput").value.trim();
 
       isProcessingActive = true;
       updateUIState('running');
@@ -210,22 +298,24 @@
               siteCategory: siteCategory,
               categoryImageUrl: categoryImage,
               geminiApiKey: apiKey,
-              telegramBypass: isBypass
+              telegramBypass: isBypass,
+              publishMode: selectedPublishMode,
+              pinterestBoard: boardName
             })
           });
 
           const singleData = await singleRes.json();
           if (singleData.success) {
-            logToConsole(`✅ SUCCESS Row ${rowNum}: Published to /${siteCategory.toLowerCase()}/ folder!`);
+            logToConsole(`✅ SUCCESS Row ${rowNum}: Added to /${siteCategory.toLowerCase()}/ and appended to ${selectedPublishMode.toUpperCase()}`);
             currentProcessingIndex++; 
 
-            // 🚀 NEW: Auto-Cooldown Feature to prevent GitHub Server Queue Jam
+            // Auto-Cooldown Feature
             if (currentProcessingIndex < globalProductsList.length && isProcessingActive) {
-              logToConsole(`⏳ GitHub server-ke thanda korar jonno 10 second opekkha kora hocche...`);
-              let waitTime = 30; // 30 Seconds Wait Time
+              logToConsole(`⏳ Waiting 30 seconds before next product to prevent rate limits...`);
+              let waitTime = 30; 
               for (let w = waitTime; w > 0; w--) {
-                if (!isProcessingActive) break; // If user clicks Force Stop during cooldown
-                status.textContent = `Cooling down... ${w} seconds remaining for next product...`;
+                if (!isProcessingActive) break; 
+                status.textContent = `Cooling down... ${w} seconds remaining...`;
                 status.style.color = "#0066cc";
                 await new Promise(resolve => setTimeout(resolve, 1000));
               }
@@ -249,6 +339,9 @@
       if (currentProcessingIndex >= globalProductsList.length) {
         status.textContent = "All targeted products processed successfully!"; status.style.color = "green";
         logToConsole("🎉 Bulk processing completed!");
+        if(selectedPublishMode === "csv"){
+           logToConsole("👉 You can now download the CSV from the settings panel!");
+        }
         updateUIState('finished');
       }
     }
