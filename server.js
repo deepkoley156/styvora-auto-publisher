@@ -35,11 +35,20 @@ app.post("/api/parse-excel", upload.single("excelFile"), (req, res) => {
 
     const products = rows.map(row => {
       const keys = Object.keys(row);
-      const getVal = (name) => row[keys.find(k => k.toLowerCase().trim() === name)] || "";
+      // Tries each alias in order, returns the first column that actually has a value
+      const getVal = (...names) => {
+        for (const name of names) {
+          const foundKey = keys.find(k => k.toLowerCase().trim() === name);
+          if (foundKey && row[foundKey]) return row[foundKey];
+        }
+        return "";
+      };
       return {
-        productLink: getVal("product link"),
+        productLink: getVal("product link", "original link", "product url"),
         affiliateLink: getVal("affiliate link"),
-        image: getVal("image")
+        image: getVal("image", "image link", "image url"),
+        seoTitle: getVal("seo title", "title"),
+        seoDescription: getVal("seo description", "description")
       };
     }).filter(p => p.productLink || p.affiliateLink);
 
@@ -52,10 +61,11 @@ app.post("/api/parse-excel", upload.single("excelFile"), (req, res) => {
 // Endpoint 2: Process a Single Product Row loop step
 app.post("/api/publish-single", async (req, res) => {
   try {
-    const { productUrl, focusProduct, geminiApiKey, telegramBypass, siteCategory, categoryImageUrl } = req.body;
+    const { productUrl, focusProduct, geminiApiKey, telegramBypass, siteCategory, categoryImageUrl, aiBypass, seoTitle, seoDescription } = req.body;
     let { affiliateLink, imageUrl } = req.body;
 
-    if (!geminiApiKey || !imageUrl) {
+    // Gemini key is only mandatory when AI Bypass is off (bypass mode can run without it)
+    if ((!geminiApiKey && !aiBypass) || !imageUrl) {
       return res.status(400).json({ success: false, error: "Missing required details." });
     }
 
@@ -73,7 +83,10 @@ app.post("/api/publish-single", async (req, res) => {
       focusProduct,
       siteCategory, 
       categoryImageUrl,
-      geminiApiKey
+      geminiApiKey,
+      aiBypass,
+      seoTitle,
+      seoDescription
     });
 
     res.json({ success: true, ...result });
