@@ -83,6 +83,11 @@
         <input type="checkbox" id="telegramBypass"> Telegram Bypass (Direct Affiliate Link)
       </label>
 
+      <label class="toggle-label" style="color: #0a7d32;">
+        <input type="checkbox" id="aiBypass"> AI Bypass (Use Title/Description from File)
+      </label>
+      <div class="note">When ON, Gemini is skipped for content — the "SEO Title" &amp; "SEO Description" columns from your uploaded file are used as-is. Gemini API Key becomes optional.</div>
+
       <div class="mode-container">
         <div class="mode-header">
             <h3>Publishing Mode</h3>
@@ -172,6 +177,7 @@
       if (localStorage.getItem("siteCategory")) document.getElementById("siteCategory").value = localStorage.getItem("siteCategory");
       if (localStorage.getItem("categoryImage")) document.getElementById("categoryImage").value = localStorage.getItem("categoryImage");
       document.getElementById("telegramBypass").checked = localStorage.getItem("telegramBypass") === "true";
+      document.getElementById("aiBypass").checked = localStorage.getItem("aiBypass") === "true";
       
       const savedMode = localStorage.getItem("publishMode");
       if (savedMode === "csv") {
@@ -194,6 +200,7 @@
       localStorage.setItem("siteCategory", document.getElementById("siteCategory").value.trim());
       localStorage.setItem("categoryImage", document.getElementById("categoryImage").value.trim());
       localStorage.setItem("telegramBypass", document.getElementById("telegramBypass").checked);
+      localStorage.setItem("aiBypass", document.getElementById("aiBypass").checked);
       localStorage.setItem("publishMode", modeToggle.checked ? "csv" : "rss");
       localStorage.setItem("pinterestBoard", boardInput.value.trim());
       
@@ -279,8 +286,9 @@
       const skipInput = document.getElementById("skipRows");
       const status = document.getElementById("status");
       const apiKey = localStorage.getItem("geminiApiKey");
+      const aiBypassEnabled = localStorage.getItem("aiBypass") === "true";
       
-      if (!apiKey) { alert("Please save your Gemini API Key in settings first!"); return; }
+      if (!apiKey && !aiBypassEnabled) { alert("Please save your Gemini API Key in settings first! (Or turn on AI Bypass to skip this requirement.)"); return; }
       if (fileInput.files.length === 0) { alert("Please upload an Excel or CSV file!"); return; }
 
       selectedPublishMode = modeToggle.checked ? "csv" : "rss";
@@ -303,6 +311,7 @@
         
         if (currentProcessingIndex > 0) logToConsole(`Skipping the first ${currentProcessingIndex} products...`);
         logToConsole(`Total rows in sheet: ${globalProductsList.length}. Mode: ${selectedPublishMode.toUpperCase()}. Starting...`);
+        if (aiBypassEnabled) logToConsole(`⚡ AI Bypass is ON — using Title/Description columns from your file directly (Gemini vision skipped where both are present).`);
         
         resumeProcessing();
       } catch (err) {
@@ -319,6 +328,7 @@
       const siteCategory = localStorage.getItem("siteCategory") || "products";
       const categoryImage = localStorage.getItem("categoryImage") || "";
       const isBypass = localStorage.getItem("telegramBypass") === "true";
+      const aiBypass = localStorage.getItem("aiBypass") === "true";
       const boardName = document.getElementById("boardInput").value.trim();
 
       isProcessingActive = true;
@@ -346,7 +356,10 @@
               siteCategory: bundledCategory,
               categoryImageUrl: categoryImage,
               geminiApiKey: apiKey,
-              telegramBypass: isBypass
+              telegramBypass: isBypass,
+              aiBypass: aiBypass,
+              seoTitle: product.seoTitle,
+              seoDescription: product.seoDescription
             })
           });
 
