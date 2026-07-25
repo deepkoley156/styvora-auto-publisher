@@ -97,6 +97,24 @@ app.post("/api/publish-single", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running smoothly on port ${PORT}`);
 });
+
+// ⚡ Graceful shutdown — ensures the old process actually releases the port
+// on redeploy/restart instead of hanging (e.g. due to an open Telegram socket)
+function shutdown(signal) {
+  console.log(`${signal} received — shutting down gracefully...`);
+  server.close(() => {
+    console.log("HTTP server closed.");
+    process.exit(0);
+  });
+  // Force-exit if something is still holding the process open after 8s
+  setTimeout(() => {
+    console.log("Forcing exit after timeout.");
+    process.exit(1);
+  }, 8000).unref();
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
