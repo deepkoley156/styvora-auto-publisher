@@ -31,7 +31,14 @@ function formatPriceBlock(mrp, price) {
   return `<div class="price-box"><span class="sale-price">₹${priceNum.toLocaleString("en-IN")}</span></div>`;
 }
 
-function buildHtml(title, desc, affiliateLink, imageUrl, hashtags, priceHtml) {
+function buildHtml(title, desc, affiliateLink, imageUrl, hashtags, priceHtml, priceNum, pageUrl) {
+  const safeTitle = escapeXml(title);
+  const safeDesc = escapeXml(desc);
+  const priceMetaTags = (priceNum && !isNaN(priceNum))
+    ? `    <meta property="product:price:amount" content="${priceNum}">
+    <meta property="product:price:currency" content="INR">
+    <meta property="product:availability" content="in stock">`
+    : "";
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -45,6 +52,14 @@ function buildHtml(title, desc, affiliateLink, imageUrl, hashtags, priceHtml) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${title} | Styvora Fashion</title>
+
+    <!-- ⚡ Pinterest / Facebook Rich Pins (Product) — this is what lets Pinterest show price on the Pin -->
+    <meta property="og:type" content="product">
+    <meta property="og:title" content="${safeTitle}">
+    <meta property="og:description" content="${safeDesc}">
+    <meta property="og:image" content="${imageUrl}">
+    <meta property="og:url" content="${pageUrl}">
+${priceMetaTags}
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #fbfbfb; color: #1a1a1a; line-height: 1.6; }
@@ -249,9 +264,13 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
   const fullPageUrl = `${siteUrl}/${pagePath}`;
 
   const priceHtml = formatPriceBlock(mrp, price);
+  const priceNum = (() => {
+    const n = parseFloat(String(price || "").replace(/[^\d.]/g, ""));
+    return isNaN(n) ? null : n;
+  })();
 
   await putGitHubFile(imagePath, imageBase64, `Add image to ${categoryFolder}`);
-  const html = buildHtml(content.title, content.description, affiliateLink, fullImageUrl, content.hashtags, priceHtml);
+  const html = buildHtml(content.title, content.description, affiliateLink, fullImageUrl, content.hashtags, priceHtml, priceNum, fullPageUrl);
   await putGitHubFile(pagePath, Buffer.from(html).toString("base64"), `Add landing page to ${categoryFolder}`);
 
   if (mode === "rss") {
