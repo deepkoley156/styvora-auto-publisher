@@ -12,7 +12,26 @@ function escapeCsv(field) {
   return stringValue;
 }
 
-function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
+function formatPriceBlock(mrp, price) {
+  const mrpNum = parseFloat(String(mrp || "").replace(/[^\d.]/g, ""));
+  const priceNum = parseFloat(String(price || "").replace(/[^\d.]/g, ""));
+
+  if (!priceNum || isNaN(priceNum)) return ""; // no usable price data at all — skip the block entirely
+
+  if (mrpNum && !isNaN(mrpNum) && mrpNum > priceNum) {
+    const discountPct = Math.round(((mrpNum - priceNum) / mrpNum) * 100);
+    return `<div class="price-box">
+        <span class="mrp">₹${mrpNum.toLocaleString("en-IN")}</span>
+        <span class="sale-price">₹${priceNum.toLocaleString("en-IN")}</span>
+        <span class="discount-badge">${discountPct}% OFF</span>
+    </div>`;
+  }
+
+  // Valid selling price but no (or invalid) MRP to compare against — show price alone
+  return `<div class="price-box"><span class="sale-price">₹${priceNum.toLocaleString("en-IN")}</span></div>`;
+}
+
+function buildHtml(title, desc, affiliateLink, imageUrl, hashtags, priceHtml) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -40,6 +59,10 @@ function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
         .product-section { max-width: 800px; margin: 60px auto; padding: 40px; background: #ffffff; border: 1px solid #eeeeee; box-shadow: 0 10px 30px rgba(0,0,0,0.02); text-align: center; }
         .product-image { max-width: 100%; max-height: 600px; object-fit: cover; border-radius: 4px; margin-bottom: 30px; }
         .product-title { font-size: 28px; font-weight: 400; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 20px; }
+        .price-box { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+        .price-box .mrp { font-size: 16px; color: #999999; text-decoration: line-through; }
+        .price-box .sale-price { font-size: 26px; font-weight: 700; color: #111111; }
+        .price-box .discount-badge { font-size: 12px; font-weight: 700; color: #ffffff; background-color: #d9534f; padding: 4px 10px; border-radius: 4px; letter-spacing: 0.5px; }
         .product-desc { font-size: 16px; color: #666666; margin-bottom: 20px; padding: 0 20px; }
         .hashtags { color: #999999; font-size: 13px; margin-bottom: 40px; letter-spacing: 1px; }
         .cta-btn { display: inline-block; padding: 15px 40px; background-color: #111111; color: #ffffff; font-size: 13px; text-transform: uppercase; letter-spacing: 2px; font-weight: 600; }
@@ -68,6 +91,7 @@ function buildHtml(title, desc, affiliateLink, imageUrl, hashtags) {
     <section class="product-section">
         <img src="${imageUrl}" alt="${title}" class="product-image">
         <h1 class="product-title">${title}</h1>
+        ${priceHtml || ""}
         <p class="product-desc">${desc}</p>
         <p class="hashtags">${hashtags}</p>
         <a href="${affiliateLink}" target="_blank" rel="nofollow" class="cta-btn">Buy Now</a>
@@ -176,7 +200,7 @@ async function updateCategoryStorefront(siteCategory, categoryFolder, productTit
 }
 
 // Main Controller
-async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCategory, categoryImageUrl, geminiApiKey, aiBypass, seoTitle, seoDescription }) {
+async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCategory, categoryImageUrl, geminiApiKey, aiBypass, seoTitle, seoDescription, mrp, price }) {
   // ⚡ 1. UNPACK BUNDLED ROUTING DATA
   let mode = "rss";
   let boardName = "Women's Fashion";
@@ -224,8 +248,10 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
   const fullImageUrl = `${siteUrl}/${imagePath}`;
   const fullPageUrl = `${siteUrl}/${pagePath}`;
 
+  const priceHtml = formatPriceBlock(mrp, price);
+
   await putGitHubFile(imagePath, imageBase64, `Add image to ${categoryFolder}`);
-  const html = buildHtml(content.title, content.description, affiliateLink, fullImageUrl, content.hashtags);
+  const html = buildHtml(content.title, content.description, affiliateLink, fullImageUrl, content.hashtags, priceHtml);
   await putGitHubFile(pagePath, Buffer.from(html).toString("base64"), `Add landing page to ${categoryFolder}`);
 
   if (mode === "rss") {
