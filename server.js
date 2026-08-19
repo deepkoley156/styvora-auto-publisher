@@ -48,7 +48,9 @@ app.post("/api/parse-excel", upload.single("excelFile"), (req, res) => {
         affiliateLink: getVal("affiliate link"),
         image: getVal("image", "image link", "image url"),
         seoTitle: getVal("seo title", "title"),
-        seoDescription: getVal("seo description", "description")
+        seoDescription: getVal("seo description", "description"),
+        mrp: getVal("mrp", "original price", "regular price", "list price"),
+        price: getVal("price", "selling price", "offer price", "discounted price", "sale price")
       };
     }).filter(p => p.productLink || p.affiliateLink);
 
@@ -61,7 +63,7 @@ app.post("/api/parse-excel", upload.single("excelFile"), (req, res) => {
 // Endpoint 2: Process a Single Product Row loop step
 app.post("/api/publish-single", async (req, res) => {
   try {
-    const { productUrl, focusProduct, geminiApiKey, telegramBypass, siteCategory, categoryImageUrl, aiBypass, seoTitle, seoDescription } = req.body;
+    const { productUrl, focusProduct, geminiApiKey, telegramBypass, siteCategory, categoryImageUrl, aiBypass, seoTitle, seoDescription, mrp, price } = req.body;
     let { affiliateLink, imageUrl } = req.body;
 
     // Gemini key is only mandatory when AI Bypass is off (bypass mode can run without it)
@@ -86,7 +88,9 @@ app.post("/api/publish-single", async (req, res) => {
       geminiApiKey,
       aiBypass,
       seoTitle,
-      seoDescription
+      seoDescription,
+      mrp,
+      price
     });
 
     res.json({ success: true, ...result });
@@ -97,6 +101,24 @@ app.post("/api/publish-single", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Server running smoothly on port ${PORT}`);
 });
+
+// ⚡ Graceful shutdown — ensures the old process actually releases the port
+// on redeploy/restart instead of hanging (e.g. due to an open Telegram socket)
+function shutdown(signal) {
+  console.log(`${signal} received — shutting down gracefully...`);
+  server.close(() => {
+    console.log("HTTP server closed.");
+    process.exit(0);
+  });
+  // Force-exit if something is still holding the process open after 8s
+  setTimeout(() => {
+    console.log("Forcing exit after timeout.");
+    process.exit(1);
+  }, 8000).unref();
+}
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
