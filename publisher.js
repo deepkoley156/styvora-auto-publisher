@@ -206,6 +206,36 @@ async function putGitHubFile(path, contentBase64, message, sha = null) {
   await axios.put(url, body, { headers: { Authorization: `Bearer ${process.env.GITHUB_TOKEN}`, Accept: "application/vnd.github+json" } });
 }
 
+async function getCategories() {
+  const file = await getGitHubFile("categories.json");
+  if (!file) return [];
+  try {
+    const parsed = JSON.parse(file.content);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+async function registerCategory(name, folder, image) {
+  const file = await getGitHubFile("categories.json");
+  let categories = [];
+  if (file) {
+    try {
+      const parsed = JSON.parse(file.content);
+      if (Array.isArray(parsed)) categories = parsed;
+    } catch (e) {}
+  }
+  if (categories.some(c => c.folder === folder)) return; // আগে থেকেই রেজিস্টার করা আছে
+  categories.push({ name, folder, image: image || "" });
+  await putGitHubFile(
+    "categories.json",
+    Buffer.from(JSON.stringify(categories, null, 2)).toString("base64"),
+    `Register new category: ${name}`,
+    file?.sha
+  );
+}
+
 async function updateHomepageWithCategory(siteCategory, categoryFolder, categoryImageUrl, geminiApiKey) {
   if (!siteCategory || siteCategory.toLowerCase() === "products") return; 
   const indexFile = await getGitHubFile("index.html");
@@ -220,6 +250,9 @@ async function updateHomepageWithCategory(siteCategory, categoryFolder, category
        indexHtml = indexHtml.replace(stylePattern, `$1${bgStyle} border: 1px solid #eeeeee; padding: 50px 30px; transition: transform 0.3s; text-align: center;$2`);
        await putGitHubFile("index.html", Buffer.from(indexHtml).toString("base64"), `Auto-updated image background for category ${siteCategory}`, indexFile.sha);
     }
+    // ⚡ এই category আগে থেকেই আছে কিন্তু categories.json ফিচার আসার আগে বানানো হয়েছিল
+    // (তাই registry-তে নেই) — সেটা এখানেই backfill করে দেওয়া হচ্ছে
+    await registerCategory(siteCategory, categoryFolder, categoryImageUrl);
     return;
   }
   let catDesc = "Discover our exclusive new arrivals tailored for your elegant lifestyle.";
@@ -241,6 +274,7 @@ async function updateHomepageWithCategory(siteCategory, categoryFolder, category
   if (indexHtml.includes('<div class="collection-grid">')) {
      indexHtml = indexHtml.replace(/(<div class="collection-grid">)/i, `$1\n${newCardHtml}`);
      await putGitHubFile("index.html", Buffer.from(indexHtml).toString("base64"), `Auto-added category ${siteCategory} to homepage`, indexFile.sha);
+     await registerCategory(siteCategory, categoryFolder, categoryImageUrl);
   }
 }
 
@@ -380,4 +414,4 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
   return { title: content.title };
 }
 
-module.exports = { publishToGitHub };
+module.exports = { publishToGitHub, getCategories };
