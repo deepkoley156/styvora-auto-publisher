@@ -217,6 +217,17 @@ async function getCategories() {
   }
 }
 
+// ⚡ Category বানানোর সময় ছবি সরাসরি আপলোড করলে সেটা GitHub-এ রেখে দিয়ে তার লাইভ URL ফেরত দেয়
+async function uploadCategoryImage(buffer, originalName, mimeType) {
+  const extMatch = (originalName || "").match(/\.([a-zA-Z0-9]+)$/);
+  const ext = (extMatch ? extMatch[1] : "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+  const baseName = (originalName || "category").replace(/\.[^.]+$/, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40) || "category";
+  const fileName = `${Date.now()}-${baseName}.${ext}`;
+  const imagePath = `category-images/${fileName}`;
+  await putGitHubFile(imagePath, buffer.toString("base64"), `Upload category background image: ${fileName}`);
+  return `https://styvorafashion.com/${imagePath}`;
+}
+
 async function registerCategory(name, folder, image) {
   const file = await getGitHubFile("categories.json");
   let categories = [];
@@ -414,4 +425,4 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
   return { title: content.title };
 }
 
-module.exports = { publishToGitHub, getCategories };
+module.exports = { publishToGitHub, getCategories, uploadCategoryImage };
