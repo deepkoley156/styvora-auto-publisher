@@ -63,7 +63,7 @@ app.post("/api/parse-excel", upload.single("excelFile"), (req, res) => {
 // Endpoint 2: Process a Single Product Row loop step
 app.post("/api/publish-single", async (req, res) => {
   try {
-    const { productUrl, focusProduct, geminiApiKey, telegramBypass, siteCategory, categoryImageUrl, aiBypass, seoTitle, seoDescription, mrp, price } = req.body;
+    const { productUrl, focusProduct, geminiApiKey, telegramBypass, siteCategory, categoryImageUrl, aiBypass, seoTitle, seoDescription, mrp, price, scheduledDate } = req.body;
     let { affiliateLink, imageUrl } = req.body;
 
     // Gemini key is only mandatory when AI Bypass is off (bypass mode can run without it)
@@ -90,7 +90,8 @@ app.post("/api/publish-single", async (req, res) => {
       seoTitle,
       seoDescription,
       mrp,
-      price
+      price,
+      scheduledDate
     });
 
     res.json({ success: true, ...result });
