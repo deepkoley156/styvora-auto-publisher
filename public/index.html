@@ -83,8 +83,10 @@
         <input type="text" id="siteCategory" placeholder="e.g. sarees, jewelry, kurtis">
         <div class="note">This folder will contain your landing pages.</div>
 
-        <label for="categoryImage" style="color: #0066cc;">Category Background Image URL (Optional)</label>
-        <input type="url" id="categoryImage" placeholder="https://... (Image link for homepage card)">
+        <label for="categoryImageFile" style="color: #0066cc;">Category Background Image (Optional)</label>
+        <input type="file" id="categoryImageFile" accept="image/*">
+        <input type="hidden" id="categoryImage">
+        <div id="categoryImageStatus" class="note"></div>
       </div>
       
       <label class="toggle-label">
@@ -231,6 +233,8 @@
       const newFields = document.getElementById("newCategoryFields");
       const siteCategoryInput = document.getElementById("siteCategory");
       const categoryImageInput = document.getElementById("categoryImage");
+      const categoryImageFile = document.getElementById("categoryImageFile");
+      const categoryImageStatus = document.getElementById("categoryImageStatus");
 
       if (sel.value === "__new__") {
         newFields.style.display = "block";
@@ -238,6 +242,9 @@
         siteCategoryInput.value = (!categoriesCache.some(c => c.name === localStorage.getItem("siteCategory")))
           ? (localStorage.getItem("siteCategory") || "") : "";
         categoryImageInput.value = siteCategoryInput.value ? (localStorage.getItem("categoryImage") || "") : "";
+        categoryImageFile.value = "";
+        categoryImageStatus.textContent = categoryImageInput.value ? "আগে থেকে সেভ করা ছবি ব্যবহার হবে (নতুন ছবি বেছে নিলে সেটা দিয়ে বদলে যাবে)" : "";
+        categoryImageStatus.style.color = "#777";
       } else {
         newFields.style.display = "none";
         const cat = categoriesCache.find(c => c.folder === sel.value);
@@ -245,6 +252,35 @@
         categoryImageInput.value = cat ? (cat.image || "") : "";
       }
     }
+
+    document.getElementById("categoryImageFile").addEventListener("change", async function () {
+      const file = this.files[0];
+      const statusDiv = document.getElementById("categoryImageStatus");
+      const categoryImageInput = document.getElementById("categoryImage");
+      if (!file) return;
+
+      statusDiv.textContent = "⏳ ছবি আপলোড হচ্ছে...";
+      statusDiv.style.color = "#f39c12";
+
+      const formData = new FormData();
+      formData.append("categoryImageFile", file);
+
+      try {
+        const res = await fetch("/api/upload-category-image", { method: "POST", body: formData });
+        const data = await res.json();
+        if (data.success) {
+          categoryImageInput.value = data.imageUrl;
+          statusDiv.textContent = "✅ আপলোড সম্পন্ন হয়েছে";
+          statusDiv.style.color = "green";
+        } else {
+          statusDiv.textContent = "❌ আপলোড ব্যর্থ: " + (data.error || "");
+          statusDiv.style.color = "red";
+        }
+      } catch (e) {
+        statusDiv.textContent = "❌ আপলোড ব্যর্থ (নেটওয়ার্ক এরর)";
+        statusDiv.style.color = "red";
+      }
+    });
 
     document.addEventListener("DOMContentLoaded", () => {
       if (localStorage.getItem("geminiApiKey")) document.getElementById("geminiKey").value = localStorage.getItem("geminiApiKey");
