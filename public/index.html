@@ -16,7 +16,8 @@
     .settings-box { display: none; background: #fafafa; border: 1px solid #ddd; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
     
     label { font-weight: bold; font-size: 14px; display: block; margin-top: 15px; margin-bottom: 5px; color: #333; }
-    input[type="text"], input[type="url"], input[type="password"], input[type="file"], input[type="number"] { width: 100%; padding: 12px; box-sizing: border-box; border-radius: 8px; border: 1px solid #ddd; font-size: 15px; background: #fff; transition: border-color 0.3s; }
+    input[type="text"], input[type="url"], input[type="password"], input[type="file"], input[type="number"], select { width: 100%; padding: 12px; box-sizing: border-box; border-radius: 8px; border: 1px solid #ddd; font-size: 15px; background: #fff; transition: border-color 0.3s; }
+    select { -webkit-appearance: none; appearance: none; }
     input:focus { border-color: #111; outline: none; }
     
     .mode-container { background: #fff; border: 1px solid #eee; padding: 15px; border-radius: 8px; margin-top: 20px; border-left: 4px solid #111; }
@@ -72,12 +73,19 @@
       <label for="productType">AI Prompt Focus</label>
       <input type="text" id="productType" placeholder="e.g. Saree, Kurti">
       
-      <label for="siteCategory" style="color: #0066cc;">Website Category (Folder Name)</label>
-      <input type="text" id="siteCategory" placeholder="e.g. sarees, jewelry, kurtis">
-      <div class="note">This folder will contain your landing pages.</div>
+      <label for="categorySelect" style="color: #0066cc;">Website Category</label>
+      <select id="categorySelect" onchange="handleCategorySelect()">
+        <option value="">-- লোড হচ্ছে... --</option>
+      </select>
 
-      <label for="categoryImage" style="color: #0066cc;">Category Background Image URL (Optional)</label>
-      <input type="url" id="categoryImage" placeholder="https://... (Image link for homepage card)">
+      <div id="newCategoryFields" style="display: none;">
+        <label for="siteCategory" style="color: #0066cc; margin-top: 15px;">New Category Name</label>
+        <input type="text" id="siteCategory" placeholder="e.g. sarees, jewelry, kurtis">
+        <div class="note">This folder will contain your landing pages.</div>
+
+        <label for="categoryImage" style="color: #0066cc;">Category Background Image URL (Optional)</label>
+        <input type="url" id="categoryImage" placeholder="https://... (Image link for homepage card)">
+      </div>
       
       <label class="toggle-label">
         <input type="checkbox" id="telegramBypass"> Telegram Bypass (Direct Affiliate Link)
@@ -182,13 +190,68 @@
         updateToggleUI(this.checked);
     });
 
+    let categoriesCache = [];
+
+    async function loadCategories() {
+      const sel = document.getElementById("categorySelect");
+      try {
+        const res = await fetch("/api/categories");
+        const data = await res.json();
+        categoriesCache = (data && data.categories) || [];
+      } catch (e) {
+        categoriesCache = [];
+      }
+
+      sel.innerHTML = "";
+      categoriesCache.forEach(cat => {
+        const opt = document.createElement("option");
+        opt.value = cat.folder;
+        opt.textContent = cat.name;
+        sel.appendChild(opt);
+      });
+      const newOpt = document.createElement("option");
+      newOpt.value = "__new__";
+      newOpt.textContent = "+ Add New Category";
+      sel.appendChild(newOpt);
+
+      const savedFolder = localStorage.getItem("siteCategoryFolder");
+      if (savedFolder && categoriesCache.some(c => c.folder === savedFolder)) {
+        sel.value = savedFolder;
+      } else if (categoriesCache.length === 0) {
+        sel.value = "__new__";
+      } else if (localStorage.getItem("siteCategory") && !categoriesCache.some(c => c.name === localStorage.getItem("siteCategory"))) {
+        // আগে টাইপ করা category dropdown-এর তালিকায় নেই (হয়তো এখনো কোনো প্রোডাক্ট publish হয়নি) — new হিসেবে দেখানো হচ্ছে
+        sel.value = "__new__";
+      }
+      handleCategorySelect();
+    }
+
+    function handleCategorySelect() {
+      const sel = document.getElementById("categorySelect");
+      const newFields = document.getElementById("newCategoryFields");
+      const siteCategoryInput = document.getElementById("siteCategory");
+      const categoryImageInput = document.getElementById("categoryImage");
+
+      if (sel.value === "__new__") {
+        newFields.style.display = "block";
+        // আগে টাইপ করা কিছু থাকলে (localStorage থেকে) preserve করা হচ্ছে, নাহলে খালি
+        siteCategoryInput.value = (!categoriesCache.some(c => c.name === localStorage.getItem("siteCategory")))
+          ? (localStorage.getItem("siteCategory") || "") : "";
+        categoryImageInput.value = siteCategoryInput.value ? (localStorage.getItem("categoryImage") || "") : "";
+      } else {
+        newFields.style.display = "none";
+        const cat = categoriesCache.find(c => c.folder === sel.value);
+        siteCategoryInput.value = cat ? cat.name : sel.value;
+        categoryImageInput.value = cat ? (cat.image || "") : "";
+      }
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
       if (localStorage.getItem("geminiApiKey")) document.getElementById("geminiKey").value = localStorage.getItem("geminiApiKey");
       if (localStorage.getItem("productType")) document.getElementById("productType").value = localStorage.getItem("productType");
-      if (localStorage.getItem("siteCategory")) document.getElementById("siteCategory").value = localStorage.getItem("siteCategory");
-      if (localStorage.getItem("categoryImage")) document.getElementById("categoryImage").value = localStorage.getItem("categoryImage");
       document.getElementById("telegramBypass").checked = localStorage.getItem("telegramBypass") === "true";
       document.getElementById("aiBypass").checked = localStorage.getItem("aiBypass") === "true";
+      loadCategories();
       
       const savedMode = localStorage.getItem("publishMode");
       if (savedMode === "csv") {
@@ -213,6 +276,7 @@
       localStorage.setItem("productType", document.getElementById("productType").value.trim());
       localStorage.setItem("siteCategory", document.getElementById("siteCategory").value.trim());
       localStorage.setItem("categoryImage", document.getElementById("categoryImage").value.trim());
+      localStorage.setItem("siteCategoryFolder", document.getElementById("categorySelect").value);
       localStorage.setItem("telegramBypass", document.getElementById("telegramBypass").checked);
       localStorage.setItem("aiBypass", document.getElementById("aiBypass").checked);
       localStorage.setItem("publishMode", modeToggle.checked ? "csv" : "rss");
@@ -437,6 +501,7 @@
            logToConsole("👉 Settings current data download link active!");
         }
         updateUIState('finished');
+        loadCategories();
       }
     }
   </script>
