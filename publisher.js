@@ -1,4 +1,5 @@
 const axios = require("axios");
+const sharp = require("sharp");
 
 function escapeXml(unsafe) {
   return String(unsafe || "").replace(/[<>&'"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '\'': '&apos;', '"': '&quot;' }[c]));
@@ -10,6 +11,55 @@ function escapeCsv(field) {
     return `"${stringValue}"`;
   }
   return stringValue;
+}
+
+// SVG-তে ব্যবহারের জন্য টেক্সট escape করা (XML-এর মতোই, & < > জরুরি)
+function escapeSvgText(text) {
+  return String(text || "").replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+}
+
+// ⚡ Pinterest-এ যাওয়া ছবির উপর price/MRP/discount টেক্সট বসিয়ে একটা নতুন "pin graphic" বানায়।
+// Price data না থাকলে মূল ছবিই অপরিবর্তিত ফেরত দেয় (কোনো ভাঙা/খালি ব্যানার বসে না)।
+async function createPinGraphic(rawImageBuffer, mrp, price) {
+  const mrpNum = parseFloat(String(mrp || "").replace(/[^\d.]/g, ""));
+  const priceNum = parseFloat(String(price || "").replace(/[^\d.]/g, ""));
+
+  if (!priceNum || isNaN(priceNum)) return rawImageBuffer; // price না থাকলে ব্যানার ছাড়াই আসল ছবি
+
+  const image = sharp(rawImageBuffer).rotate(); // rotate() EXIF orientation ঠিক করে দেয়
+  const metadata = await image.metadata();
+  const width = metadata.width || 1000;
+  const height = metadata.height || 1500;
+
+  const hasDiscount = mrpNum && !isNaN(mrpNum) && mrpNum > priceNum;
+  const discountPct = hasDiscount ? Math.round(((mrpNum - priceNum) / mrpNum) * 100) : null;
+
+  const bannerHeight = Math.round(height * 0.13);
+  const priceFontSize = Math.round(bannerHeight * 0.48);
+  const mrpFontSize = Math.round(bannerHeight * 0.28);
+  const padding = Math.round(width * 0.035);
+
+  const priceText = `₹${priceNum.toLocaleString("en-IN")}`;
+  const mrpText = hasDiscount ? `₹${mrpNum.toLocaleString("en-IN")}` : "";
+  const badgeText = hasDiscount ? `${discountPct}% OFF` : "";
+  const badgeWidth = Math.round(mrpFontSize * badgeText.length * 0.62) + 24;
+  const badgeHeight = Math.round(mrpFontSize * 1.7);
+
+  const svg = `
+    <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="${height - bannerHeight}" width="${width}" height="${bannerHeight}" fill="#000000" fill-opacity="0.68"/>
+      <text x="${padding}" y="${height - bannerHeight / 2 + priceFontSize * 0.34}" font-family="Arial, Helvetica, sans-serif" font-size="${priceFontSize}" font-weight="700" fill="#ffffff">${escapeSvgText(priceText)}</text>
+      ${hasDiscount ? `
+      <text x="${padding + priceFontSize * (priceText.length * 0.62) + 18}" y="${height - bannerHeight / 2 - mrpFontSize * 0.15}" font-family="Arial, Helvetica, sans-serif" font-size="${mrpFontSize}" fill="#cccccc" text-decoration="line-through">${escapeSvgText(mrpText)}</text>
+      <rect x="${width - padding - badgeWidth}" y="${height - bannerHeight / 2 - badgeHeight / 2}" width="${badgeWidth}" height="${badgeHeight}" rx="6" fill="#d9364f"/>
+      <text x="${width - padding - badgeWidth / 2}" y="${height - bannerHeight / 2 + mrpFontSize * 0.32}" font-family="Arial, Helvetica, sans-serif" font-size="${Math.round(mrpFontSize * 0.85)}" font-weight="700" fill="#ffffff" text-anchor="middle">${escapeSvgText(badgeText)}</text>
+      ` : ""}
+    </svg>`;
+
+  return await image
+    .composite([{ input: Buffer.from(svg), top: 0, left: 0 }])
+    .jpeg({ quality: 90 })
+    .toBuffer();
 }
 
 function formatPriceBlock(mrp, price) {
@@ -259,8 +309,10 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
   
   const siteUrl = "https://styvorafashion.com"; 
   const imagePath = `${categoryFolder}/images/${slug}.jpg`;
+  const pinImagePath = `${categoryFolder}/images/${slug}-pin.jpg`;
   const pagePath = `${categoryFolder}/${slug}.html`;
   const fullImageUrl = `${siteUrl}/${imagePath}`;
+  const fullPinImageUrl = `${siteUrl}/${pinImagePath}`;
   const fullPageUrl = `${siteUrl}/${pagePath}`;
 
   const priceHtml = formatPriceBlock(mrp, price);
@@ -275,6 +327,12 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
   const existingImageFile = await getGitHubFile(imagePath);
   await putGitHubFile(imagePath, imageBase64, `Add/update image for ${categoryFolder}`, existingImageFile?.sha);
 
+  // ⚡ Pinterest-এর জন্য price/MRP/discount টেক্সট বসানো আলাদা একটা graphic —
+  // ওয়েবসাইটের নিজের প্রোডাক্ট পেজ/og:image আগের মতোই clean ছবি ব্যবহার করবে
+  const pinImageBuffer = await createPinGraphic(Buffer.from(imgRes.data), mrp, price);
+  const existingPinImageFile = await getGitHubFile(pinImagePath);
+  await putGitHubFile(pinImagePath, pinImageBuffer.toString("base64"), `Add/update Pinterest graphic for ${categoryFolder}`, existingPinImageFile?.sha);
+
   const html = buildHtml(content.title, content.description, affiliateLink, fullImageUrl, content.hashtags, priceHtml, priceNum, fullPageUrl);
   const existingPageFile = await getGitHubFile(pagePath);
   await putGitHubFile(pagePath, Buffer.from(html).toString("base64"), `Add/update landing page for ${categoryFolder}`, existingPageFile?.sha);
@@ -286,7 +344,7 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
     <guid>${escapeXml(fullPageUrl)}</guid>
     <description><![CDATA[${content.description} \n\n ${content.hashtags}]]></description>
     <pubDate>${escapeXml(new Date().toUTCString())}</pubDate>
-    <enclosure url="${escapeXml(fullImageUrl)}" length="1024" type="image/jpeg" />
+    <enclosure url="${escapeXml(fullPinImageUrl)}" length="1024" type="image/jpeg" />
     <altText><![CDATA[${content.altText || content.title}]]></altText>
   </item>`;
 
@@ -298,7 +356,7 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
     await putGitHubFile("rss.xml", Buffer.from(rssContent).toString("base64"), `Update RSS feed for ${categoryFolder}`, existingRss?.sha);
   } else if (mode === "csv") {
     const cleanDesc = `${content.description} \n\n ${content.hashtags}`;
-    const newCsvRow = `${escapeCsv(content.title)},${escapeCsv(fullImageUrl)},${escapeCsv(boardName)},,${escapeCsv(cleanDesc)},${escapeCsv(fullPageUrl)},${escapeCsv(scheduledDate || "")},${escapeCsv(actualSiteCategory)}\n`;
+    const newCsvRow = `${escapeCsv(content.title)},${escapeCsv(fullPinImageUrl)},${escapeCsv(boardName)},,${escapeCsv(cleanDesc)},${escapeCsv(fullPageUrl)},${escapeCsv(scheduledDate || "")},${escapeCsv(actualSiteCategory)}\n`;
 
     const existingCsv = await getGitHubFile("pinterest_bulk.csv");
     let csvContent = "";
