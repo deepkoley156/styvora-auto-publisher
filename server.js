@@ -3,7 +3,7 @@ const express = require("express");
 const dotenv = require("dotenv");
 const multer = require("multer");
 const xlsx = require("xlsx");
-const { publishToGitHub } = require("./publisher");
+const { publishToGitHub, getCategories } = require("./publisher");
 
 let sendLinkToBot;
 try {
@@ -22,6 +22,16 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.static(path.join(__dirname, "public")));
+
+// Endpoint: Website-এ এখন পর্যন্ত যেসব category আছে তার লিস্ট (dropdown-এর জন্য)
+app.get("/api/categories", async (req, res) => {
+  try {
+    const categories = await getCategories();
+    res.json({ success: true, categories });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message, categories: [] });
+  }
+});
 
 // Endpoint 1: Parse uploaded Excel file columns
 app.post("/api/parse-excel", upload.single("excelFile"), (req, res) => {
