@@ -112,6 +112,10 @@
         <div id="boardInputContainer" style="opacity: 0.5;">
             <label style="margin-top: 0; font-size: 13px;">Pinterest Board Name:</label>
             <input type="text" id="boardInput" value="Indian Jhumka Earrings | Traditional" placeholder="Enter board name" disabled style="background: #f0f0f0; color: #999;">
+
+            <label style="font-size: 13px;">Pin Schedule শুরু (প্রথম pin এর ১ ঘণ্টা পর):</label>
+            <input type="datetime-local" id="scheduleStartInput" disabled style="background: #f0f0f0; color: #999;">
+            <div class="note" style="margin-bottom: 0;">খালি রাখলে সব pin একসাথে/immediate publish হবে (আগের মতো)। সময় দিলে প্রতিটা পরের প্রোডাক্ট ১ ঘণ্টা পর পর শিডিউল হবে — যেমন 9:00 AM দিলে ১ম pin 10:00, ২য় 11:00, ৩য় 12:00...</div>
         </div>
       </div>
 
@@ -146,12 +150,16 @@
     const boardContainer = document.getElementById('boardInputContainer');
     const downloadBox = document.getElementById('downloadBox');
     const resetCsvBtn = document.getElementById('resetCsvBtn');
+    const scheduleStartInput = document.getElementById('scheduleStartInput');
 
     function updateToggleUI(isChecked) {
         if (isChecked) {
             boardInput.disabled = false;
             boardInput.style.background = "#fff";
             boardInput.style.color = "#111";
+            scheduleStartInput.disabled = false;
+            scheduleStartInput.style.background = "#fff";
+            scheduleStartInput.style.color = "#111";
             boardContainer.style.opacity = "1";
             downloadBox.style.display = "inline-block";
             resetCsvBtn.style.display = "inline-block"; 
@@ -160,6 +168,9 @@
             boardInput.disabled = true;
             boardInput.style.background = "#f0f0f0";
             boardInput.style.color = "#999";
+            scheduleStartInput.disabled = true;
+            scheduleStartInput.style.background = "#f0f0f0";
+            scheduleStartInput.style.color = "#999";
             boardContainer.style.opacity = "0.5";
             downloadBox.style.display = "none";
             resetCsvBtn.style.display = "none"; 
@@ -187,6 +198,9 @@
       if (localStorage.getItem("pinterestBoard")) {
           boardInput.value = localStorage.getItem("pinterestBoard");
       }
+      if (localStorage.getItem("pinScheduleStart")) {
+          scheduleStartInput.value = localStorage.getItem("pinScheduleStart");
+      }
     });
 
     function toggleSettings() {
@@ -203,6 +217,7 @@
       localStorage.setItem("aiBypass", document.getElementById("aiBypass").checked);
       localStorage.setItem("publishMode", modeToggle.checked ? "csv" : "rss");
       localStorage.setItem("pinterestBoard", boardInput.value.trim());
+      localStorage.setItem("pinScheduleStart", scheduleStartInput.value);
       
       selectedPublishMode = modeToggle.checked ? "csv" : "rss";
       
@@ -330,6 +345,13 @@
       const isBypass = localStorage.getItem("telegramBypass") === "true";
       const aiBypass = localStorage.getItem("aiBypass") === "true";
       const boardName = document.getElementById("boardInput").value.trim();
+      const scheduleStartRaw = localStorage.getItem("pinScheduleStart");
+
+      // Pinterest bulk CSV-র "Publish date" কলাম UTC time-এ "YYYY-MM-DD HH:MM" ফরম্যাট চায়
+      const formatPinterestDate = (d) => {
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+      };
 
       isProcessingActive = true;
       updateUIState('running');
@@ -343,6 +365,17 @@
         logToConsole(`Processing Row ${rowNum}...`);
 
         const bundledCategory = siteCategory + "|||" + selectedPublishMode + "|||" + boardName;
+
+        // ⚡ CSV mode-এ, schedule start সেট করা থাকলে প্রতিটা পরবর্তী প্রোডাক্ট আগেরটার
+        // ১ ঘণ্টা পর শিডিউল হবে (rowNum-ভিত্তিক, তাই skip/restart করলেও সময় consistent থাকে)
+        let scheduledDate = "";
+        if (scheduleStartRaw && selectedPublishMode === "csv") {
+          const baseDate = new Date(scheduleStartRaw);
+          if (!isNaN(baseDate.getTime())) {
+            const pinDateTime = new Date(baseDate.getTime() + rowNum * 60 * 60 * 1000);
+            scheduledDate = formatPinterestDate(pinDateTime);
+          }
+        }
 
         try {
           const singleRes = await fetch("/api/publish-single", {
@@ -361,7 +394,8 @@
               seoTitle: product.seoTitle,
               seoDescription: product.seoDescription,
               mrp: product.mrp,
-              price: product.price
+              price: product.price,
+              scheduledDate: scheduledDate
             })
           });
 
