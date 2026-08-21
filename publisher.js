@@ -250,7 +250,7 @@ async function updateCategoryStorefront(siteCategory, categoryFolder, productTit
   const productCardHtml = `
             <div class="collection-card" style="padding: 15px; text-align: center; background: #ffffff; border: 1px solid #eeeeee;">
                 <a href="${fullPageUrl}" style="text-decoration:none; color:inherit;">
-                    <img src="${fullImageUrl}" alt="${productTitle}" style="width: 100%; height: 320px; object-fit: cover; border-radius: 8px; margin-bottom: 15px;">
+                    <img src="${fullImageUrl}" alt="${productTitle}" style="width: 100%; height: auto; display: block; border-radius: 8px; margin-bottom: 15px;">
                     <h3 style="font-size: 16px; font-weight: 500; margin-bottom: 10px; text-transform: uppercase;">${productTitle}</h3>
                     <span style="font-size: 12px; font-weight: bold; border-bottom: 1px solid #111;">VIEW PRODUCT &rarr;</span>
                 </a>
