@@ -215,7 +215,7 @@ async function updateCategoryStorefront(siteCategory, categoryFolder, productTit
 }
 
 // Main Controller
-async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCategory, categoryImageUrl, geminiApiKey, aiBypass, seoTitle, seoDescription, mrp, price }) {
+async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCategory, categoryImageUrl, geminiApiKey, aiBypass, seoTitle, seoDescription, mrp, price, scheduledDate }) {
   // ⚡ 1. UNPACK BUNDLED ROUTING DATA
   let mode = "rss";
   let boardName = "Women's Fashion";
@@ -269,9 +269,15 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
     return isNaN(n) ? null : n;
   })();
 
-  await putGitHubFile(imagePath, imageBase64, `Add image to ${categoryFolder}`);
+  // ⚡ একই slug-এর ফাইল আগে থেকেই থাকলে তার sha নেওয়া হচ্ছে — না নিলে GitHub existing ফাইল
+  // overwrite করতে 422 error দেয়। এটা করার ফলে একই প্রোডাক্ট (যেমন সঠিক MRP দিয়ে) আবার
+  // publish করলে সেটা নতুন ফাইলের বদলে আগেরটাকেই আপডেট করবে।
+  const existingImageFile = await getGitHubFile(imagePath);
+  await putGitHubFile(imagePath, imageBase64, `Add/update image for ${categoryFolder}`, existingImageFile?.sha);
+
   const html = buildHtml(content.title, content.description, affiliateLink, fullImageUrl, content.hashtags, priceHtml, priceNum, fullPageUrl);
-  await putGitHubFile(pagePath, Buffer.from(html).toString("base64"), `Add landing page to ${categoryFolder}`);
+  const existingPageFile = await getGitHubFile(pagePath);
+  await putGitHubFile(pagePath, Buffer.from(html).toString("base64"), `Add/update landing page for ${categoryFolder}`, existingPageFile?.sha);
 
   if (mode === "rss") {
     const itemXml = `  <item>
@@ -292,7 +298,7 @@ async function publishToGitHub({ affiliateLink, imageUrl, focusProduct, siteCate
     await putGitHubFile("rss.xml", Buffer.from(rssContent).toString("base64"), `Update RSS feed for ${categoryFolder}`, existingRss?.sha);
   } else if (mode === "csv") {
     const cleanDesc = `${content.description} \n\n ${content.hashtags}`;
-    const newCsvRow = `${escapeCsv(content.title)},${escapeCsv(fullImageUrl)},${escapeCsv(boardName)},,${escapeCsv(cleanDesc)},${escapeCsv(fullPageUrl)},,${escapeCsv(actualSiteCategory)}\n`;
+    const newCsvRow = `${escapeCsv(content.title)},${escapeCsv(fullImageUrl)},${escapeCsv(boardName)},,${escapeCsv(cleanDesc)},${escapeCsv(fullPageUrl)},${escapeCsv(scheduledDate || "")},${escapeCsv(actualSiteCategory)}\n`;
 
     const existingCsv = await getGitHubFile("pinterest_bulk.csv");
     let csvContent = "";
