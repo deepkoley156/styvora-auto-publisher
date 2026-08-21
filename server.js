@@ -3,7 +3,7 @@ const express = require("express");
 const dotenv = require("dotenv");
 const multer = require("multer");
 const xlsx = require("xlsx");
-const { publishToGitHub, getCategories } = require("./publisher");
+const { publishToGitHub, getCategories, uploadCategoryImage } = require("./publisher");
 
 let sendLinkToBot;
 try {
@@ -30,6 +30,17 @@ app.get("/api/categories", async (req, res) => {
     res.json({ success: true, categories });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message, categories: [] });
+  }
+});
+
+// Endpoint: New category-র background image সরাসরি আপলোড (link পেস্ট করার বদলে)
+app.post("/api/upload-category-image", upload.single("categoryImageFile"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, error: "No file uploaded." });
+    const imageUrl = await uploadCategoryImage(req.file.buffer, req.file.originalname, req.file.mimetype);
+    res.json({ success: true, imageUrl });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
